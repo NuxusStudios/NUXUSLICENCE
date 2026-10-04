@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.expo/
+web-build/
+e2e/shots/
+*.log
+.env
+.env.*
+google-service-account.json
+*.p8
+*.p12
+*.jks
+*.keystore
+ios/
+android/
