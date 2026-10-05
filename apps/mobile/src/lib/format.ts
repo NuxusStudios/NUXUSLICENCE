@@ -32,3 +32,8 @@ export function dateTime(iso: string, lang: Lang = 'en'): string {
 export function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400_000);
 }
+
+/** Dates as printed on Canadian identity documents: YYYY/MM/DD. */
+export function cardDate(iso: string): string {
+  return iso.slice(0, 10).replace(/-/g, '/');
+}

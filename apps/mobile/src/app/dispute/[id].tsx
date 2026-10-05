@@ -8,10 +8,11 @@ import { useI18n } from '../../lib/i18n';
 import { radius, space, useTheme } from '../../lib/theme';
 
 export default function Dispute() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; option?: string }>();
+  const id = params.id;
   const c = useTheme();
   const { t } = useI18n();
-  const [option, setOption] = useState<'early_resolution' | 'trial'>('early_resolution');
+  const [option, setOption] = useState<'early_resolution' | 'trial'>(params.option === 'trial' ? 'trial' : 'early_resolution');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();

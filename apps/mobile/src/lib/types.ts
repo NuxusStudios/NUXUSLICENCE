@@ -30,6 +30,8 @@ export interface Vehicle {
   model: string;
   year: number;
   colour: string;
+  /** Body style as recorded on the permit, e.g. SEDAN, MOTORCYCLE. */
+  bodyType?: string;
   plateValidationExpires: string;
   insurance: { provider: string; policyNumber: string; expiresOn: string };
 }

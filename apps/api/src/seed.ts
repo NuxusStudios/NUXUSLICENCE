@@ -42,6 +42,7 @@ export async function seed(store: Store): Promise<void> {
     model: 'Civic',
     year: 2021,
     colour: 'Blue',
+    bodyType: 'SEDAN',
     plateValidationExpires: iso(24).slice(0, 10),
     insurance: { provider: 'Example Mutual', policyNumber: 'EM-55120-88', expiresOn: iso(140).slice(0, 10) },
   });
@@ -55,6 +56,7 @@ export async function seed(store: Store): Promise<void> {
     model: 'MT-07',
     year: 2019,
     colour: 'Black',
+    bodyType: 'MOTORCYCLE',
     plateValidationExpires: iso(210).slice(0, 10),
     insurance: { provider: 'Example Mutual', policyNumber: 'EM-55120-91', expiresOn: iso(140).slice(0, 10) },
   });
@@ -242,6 +244,7 @@ export async function seed(store: Store): Promise<void> {
     model: 'Corolla',
     year: 2019,
     colour: 'Silver',
+    bodyType: 'SEDAN',
     plateValidationExpires: iso(90).slice(0, 10),
     insurance: { provider: 'Sample Insurance Co.', policyNumber: 'SIC-0091', expiresOn: iso(60).slice(0, 10) },
   });

@@ -3,7 +3,7 @@ import { AccessibilityInfo, Animated, Easing, Platform, StyleSheet, Text, View }
 import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { IS_PROTOTYPE } from '../lib/config';
-import { date } from '../lib/format';
+import { cardDate, date } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { DOCUMENT_PALETTE, fonts, radius } from '../lib/theme';
 import type { Credential } from '../lib/types';
@@ -15,6 +15,32 @@ export const CREDENTIAL_ICON: Record<Credential['type'], IconName> = {
   health_card: 'medkit',
   vehicle_permit: 'document-text',
 };
+
+/** Canadian documents carry both official languages, whatever the app language is. */
+const BILINGUAL_TITLE: Record<Credential['type'], [string, string]> = {
+  driver_licence: ["DRIVER'S LICENCE", 'PERMIS DE CONDUIRE'],
+  health_card: ['HEALTH CARD', 'CARTE SANTÉ'],
+  photo_card: ['PHOTO CARD', 'CARTE-PHOTO'],
+  vehicle_permit: ['VEHICLE PERMIT', "CERTIFICAT D'IMMATRICULATION"],
+};
+
+/**
+ * One field as printed on the card. `n` is the ISO/IEC 18013-1 field number
+ * used on North American licences (1 surname, 3 date of birth, 4b expiry…).
+ */
+function F({ n, label, value, mono, big, style }: { n: string; label: string; value: string; mono?: boolean; big?: boolean; style?: object }) {
+  return (
+    <View style={[{ gap: 1, flexShrink: 1 }, style]}>
+      <Text style={styles.fieldLabel} numberOfLines={1}>
+        <Text style={styles.fieldNo}>{n} </Text>
+        {label}
+      </Text>
+      <Text style={[mono ? styles.fieldMono : styles.fieldValue, big && { fontSize: 15 }]} numberOfLines={2}>
+        {value}
+      </Text>
+    </View>
+  );
+}
 
 /** ID-1 card proportions (85.6 × 54 mm), the size of a real licence. */
 export const CARD_RATIO = 85.6 / 54;
@@ -185,7 +211,14 @@ export function DocumentCard({ credential, compact, animated = !compact }: { cre
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Ionicons name={CREDENTIAL_ICON[credential.type]} size={15} color="#FFFFFF" />
-            <Text style={styles.docType}>{t(credential.type).toUpperCase()}</Text>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={styles.docType} numberOfLines={1}>
+                {BILINGUAL_TITLE[credential.type][0]}
+              </Text>
+              <Text style={styles.docTypeFr} numberOfLines={1}>
+                {BILINGUAL_TITLE[credential.type][1]}
+              </Text>
+            </View>
           </View>
           <View style={styles.headerRight}>
             {compact && topRight ? <Text style={styles.topRight}>{topRight}</Text> : null}
@@ -196,9 +229,9 @@ export function DocumentCard({ credential, compact, animated = !compact }: { cre
           </View>
         </View>
 
-        <View style={styles.bodyRow}>
-          {isVehicle ? (
-            <View style={{ flex: 1, gap: 6 }}>
+        {isVehicle ? (
+          <>
+            <View style={{ flex: 1, gap: 6, justifyContent: 'center' }}>
               <View style={styles.plate}>
                 <Text style={styles.plateText}>{credential.vehicle?.plate}</Text>
               </View>
@@ -206,39 +239,44 @@ export function DocumentCard({ credential, compact, animated = !compact }: { cre
                 {credential.vehicle?.year} {credential.vehicle?.make} {credential.vehicle?.model} · {credential.vehicle?.colour}
               </Text>
             </View>
-          ) : (
-            <>
+            <View style={styles.footer}>
+              <F n="" label="VIN / NIV" value={credential.vehicle?.vin ?? ''} mono />
+              <F n="" label="EXP" value={cardDate(credential.expiresOn)} style={{ alignItems: 'flex-end' }} />
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.idBody}>
               <View style={styles.photo} accessibilityLabel="Photo">
                 <Text style={styles.initials}>{initials}</Text>
                 <View style={styles.photoSeal}>
                   <HoloSeal id={credential.id} size={24} />
                 </View>
               </View>
-              <View style={{ flex: 1, gap: 1 }}>
-                <Text style={styles.surname} numberOfLines={1}>
-                  {holder.surname.toUpperCase()}
-                </Text>
-                <Text style={styles.given} numberOfLines={1}>
-                  {holder.givenNames}
-                </Text>
-                <Text style={[styles.meta, { marginTop: 6 }]}>
-                  {date(holder.dateOfBirth, lang)} · {holder.sex} · {holder.heightCm} cm
-                </Text>
+              <View style={{ flex: 1, gap: 5 }}>
+                <F n="4d" label="NUMBER / NO" value={credential.documentNumber} mono big />
+                <F n="1,2" label="NAME / NOM" value={`${holder.surname.toUpperCase()},\n${holder.givenNames.toUpperCase()}`} />
+                <View style={styles.fieldRow}>
+                  <F n="3" label="DOB / DDN" value={cardDate(holder.dateOfBirth)} />
+                  <F n="15" label="SEX / SEXE" value={holder.sex} />
+                  {credential.type === 'driver_licence' && <F n="16" label="HGT / TAILLE" value={`${holder.heightCm} cm`} />}
+                </View>
               </View>
-            </>
-          )}
-        </View>
-
-        <View style={styles.footer}>
-          <View style={{ gap: 2 }}>
-            <Text style={styles.footLabel}>{isVehicle ? t('vin') : t('licenceNumber')}</Text>
-            <Text style={styles.number}>{isVehicle ? credential.vehicle?.vin : credential.documentNumber}</Text>
-          </View>
-          <View style={{ gap: 2, alignItems: 'flex-end' }}>
-            <Text style={styles.footLabel}>{t('expires')}</Text>
-            <Text style={styles.expiry}>{date(credential.expiresOn, lang)}</Text>
-          </View>
-        </View>
+            </View>
+            <View style={styles.footer}>
+              <View style={styles.fieldRow}>
+                <F n="4a" label="ISS / DÉL" value={cardDate(credential.issuedOn)} />
+                <F n="4b" label="EXP" value={cardDate(credential.expiresOn)} />
+                {credential.licenceClass ? <F n="9" label="CLASS / CAT" value={credential.licenceClass} /> : null}
+                {credential.type === 'driver_licence' ? <F n="12" label="REST / COND" value={credential.conditions?.length ? credential.conditions.map((c) => c.split(' ')[0]).join(' ') : '—'} /> : null}
+              </View>
+              {/* Ghost image: a faint second portrait, a common security feature. */}
+              <View style={styles.ghost} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <Text style={styles.ghostText}>{initials}</Text>
+              </View>
+            </View>
+          </>
+        )}
       </View>
 
       {isVehicle && (
@@ -263,6 +301,15 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   docType: { color: '#FFFFFF', fontFamily: fonts.bold, letterSpacing: 1.6, fontSize: 11.5 },
+  docTypeFr: { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.semibold, letterSpacing: 1.2, fontSize: 8.5, marginTop: 1 },
+  idBody: { flexDirection: 'row', gap: 14, alignItems: 'flex-start', flex: 1, marginTop: 10 },
+  fieldRow: { flexDirection: 'row', gap: 12, flexShrink: 1 },
+  fieldLabel: { color: 'rgba(255,255,255,0.62)', fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 0.8 },
+  fieldNo: { color: 'rgba(255,255,255,0.9)', fontFamily: fonts.bold },
+  fieldValue: { color: '#FFFFFF', fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15 },
+  fieldMono: { color: '#FFFFFF', fontFamily: fonts.mono, fontSize: 12, letterSpacing: 0.6 },
+  ghost: { width: 24, height: 30, borderRadius: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', opacity: 0.55 },
+  ghostText: { color: 'rgba(255,255,255,0.8)', fontFamily: fonts.bold, fontSize: 10 },
   topRight: { color: 'rgba(255,255,255,0.9)', fontFamily: fonts.mono, fontSize: 12.5, letterSpacing: 0.5 },
   status: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 },
   dot: { width: 6, height: 6, borderRadius: 3 },
