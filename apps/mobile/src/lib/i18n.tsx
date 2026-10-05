@@ -218,6 +218,12 @@ const en = {
   privacy: 'Privacy',
   privacyBody: 'Your data stays with the issuing ministries. This app shows it to you and shares only what you choose, each time you choose.',
   version: 'Version',
+  revokeNow: 'Revoke all QR codes',
+  demoTools: 'Demo',
+  simulateTicket: 'Simulate a red light camera ticket',
+  simulateTicketBody: 'Pretend a camera just recorded one of your plates. The ticket lands on your account automatically, the way the processing centre would send it.',
+  simulatedTicket: 'New camera ticket added for plate',
+  viewTicket: 'View ticket',
 } as const;
 
 export type TKey = keyof typeof en;
@@ -405,6 +411,12 @@ const fr: Partial<Record<TKey, string>> = {
   revokeConfirm: 'Tous les codes QR affichés jusqu’ici cesseront de fonctionner. Continuer?',
   revoked_done: 'Portefeuille révoqué.',
   privacy: 'Confidentialité',
+  revokeNow: 'Révoquer tous les codes QR',
+  demoTools: 'Démo',
+  simulateTicket: 'Simuler une contravention de caméra feu rouge',
+  simulateTicketBody: 'Faites comme si une caméra venait de capter l’une de vos plaques. La contravention arrive automatiquement dans votre compte.',
+  simulatedTicket: 'Nouvelle contravention ajoutée pour la plaque',
+  viewTicket: 'Voir la contravention',
   privacyBody: 'Vos données restent auprès des ministères émetteurs. L’application vous les montre et ne partage que ce que vous choisissez, chaque fois.',
 };
 

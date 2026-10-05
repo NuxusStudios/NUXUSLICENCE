@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { View } from 'react-native';
+import { router } from 'expo-router';
 import { FineRow } from '../../components/FineRow';
-import { Button, Card, Empty, ErrorState, Loading, Notice, Screen } from '../../components/ui';
+import { Body, Button, Card, Empty, ErrorState, Loading, Notice, Screen, SectionHeader } from '../../components/ui';
 import { api } from '../../lib/api';
+import { DEMO_MODE } from '../../lib/config';
 import { useI18n } from '../../lib/i18n';
 import { space } from '../../lib/theme';
 import { useAsync } from '../../lib/useAsync';
@@ -30,6 +32,39 @@ export default function Fines() {
       </View>
       {overdue && <Notice tone="danger">{t('blockedRenewal')}</Notice>}
       <Card>{shown.length ? shown.map((f) => <FineRow key={f.id} fine={f} />) : <Empty icon="happy-outline" text={t('noFines')} />}</Card>
+      {DEMO_MODE && <SimulateTicket onCreated={reload} />}
     </Screen>
+  );
+}
+
+function SimulateTicket({ onCreated }: { onCreated: () => Promise<void> }) {
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState<{ fineId: string; plate: string }>();
+
+  async function simulate() {
+    setBusy(true);
+    try {
+      setCreated(await api.simulateCameraTicket());
+      await onCreated();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <SectionHeader>{t('demoTools')}</SectionHeader>
+      <Card>
+        <Body muted>{t('simulateTicketBody')}</Body>
+        {created && (
+          <Notice tone="success">
+            {t('simulatedTicket')} {created.plate}
+          </Notice>
+        )}
+        {created && <Button title={t('viewTicket')} variant="secondary" onPress={() => router.push(`/fine/${created.fineId}`)} />}
+        <Button title={t('simulateTicket')} icon="videocam" onPress={simulate} loading={busy} />
+      </Card>
+    </>
   );
 }

@@ -7,6 +7,7 @@ import { LockScreen } from '../components/LockScreen';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { useTheme } from '../lib/theme';
+import { APP_NAME } from '../lib/config';
 import { usePushRegistration } from '../lib/push';
 
 function RootNavigator() {
@@ -29,7 +30,8 @@ function RootNavigator() {
       }}
     >
       <Stack.Protected guard={status === 'signedIn'}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* The title is what the back button announces to screen readers ("CivicPass, back"). */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, title: APP_NAME }} />
         <Stack.Screen name="credential/[id]" options={{ title: '' }} />
         <Stack.Screen name="vehicle/[id]" options={{ title: '' }} />
         <Stack.Screen name="fine/[id]" options={{ title: '' }} />

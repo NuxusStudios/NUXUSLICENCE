@@ -1,4 +1,5 @@
-import { API_URL } from './config';
+import { API_URL, DEMO_MODE } from './config';
+import { demoRequest, DemoHttpError } from './demo/backend';
 import type {
   AccessLogEntry,
   Credential,
@@ -33,6 +34,17 @@ export function setUnauthorizedHandler(handler: () => void) {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (DEMO_MODE) {
+    try {
+      return (await demoRequest(method, path, body as Record<string, unknown> | undefined, accessToken)) as T;
+    } catch (e) {
+      if (e instanceof DemoHttpError) {
+        if (e.status === 401 && accessToken) onUnauthorized?.();
+        throw new ApiError(e.status, e.code, e.message);
+      }
+      throw e;
+    }
+  }
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
@@ -105,6 +117,9 @@ export const api = {
   markRead: (id: string) => request<InboxMessage>('POST', `/v1/inbox/${id}/read`, {}),
 
   payments: () => request<Payment[]>('GET', '/v1/payments'),
+
+  /** Demo mode only: pretend a red-light camera just recorded one of your plates. */
+  simulateCameraTicket: () => request<{ fineId: string; plate: string }>('POST', '/v1/demo/camera-event', {}),
 
   sign: (body: { documentTitle: string; documentContent: string; consent: true }) =>
     request<SignatureRecord>('POST', '/v1/signatures', body),

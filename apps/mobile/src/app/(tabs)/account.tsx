@@ -1,7 +1,8 @@
-import { Alert, Platform, Switch, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, Switch, View } from 'react-native';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
-import { Body, Button, Card, Divider, ErrorState, ListItem, Loading, Row, Screen, SectionHeader } from '../../components/ui';
+import { Body, Button, Card, Divider, ErrorState, ListItem, Loading, Notice, Row, Screen, SectionHeader } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { date } from '../../lib/format';
@@ -9,19 +10,14 @@ import { useI18n, type Lang } from '../../lib/i18n';
 import { space, useTheme } from '../../lib/theme';
 import { useAsync } from '../../lib/useAsync';
 
-function confirm(message: string, onYes: () => void) {
-  if (Platform.OS === 'web') {
-    if (globalThis.confirm?.(message)) onYes();
-    return;
-  }
-  Alert.alert('', message, [{ text: 'Cancel', style: 'cancel' }, { text: 'OK', style: 'destructive', onPress: onYes }]);
-}
-
 export default function Account() {
   const c = useTheme();
   const { t, lang, setLang } = useI18n();
   const { signOut, biometricLock, setBiometricLock } = useAuth();
   const { data, error, loading, reload } = useAsync(api.me);
+  // Confirmation is built into the screen: system dialogs aren't available everywhere (e.g. embedded web views).
+  const [revoke, setRevoke] = useState<'idle' | 'confirm' | 'busy' | 'done'>('idle');
+  const [message, setMessage] = useState<string>();
   if (!data && loading) return <Loading />;
   if (!data && error) return <ErrorState error={error} onRetry={reload} />;
   const { account, person } = data!;
@@ -35,7 +31,7 @@ export default function Account() {
     try {
       await setBiometricLock(on);
     } catch (e) {
-      Alert.alert('', (e as Error).message);
+      setMessage((e as Error).message);
     }
   }
 
@@ -73,17 +69,30 @@ export default function Account() {
         <Divider />
         <ListItem icon="receipt-outline" title={t('payments')} onPress={() => router.push('/payments')} />
         <Divider />
-        <ListItem
-          icon="phone-portrait"
-          tone="danger"
-          title={t('lostDevice')}
-          onPress={() =>
-            confirm(t('revokeConfirm'), async () => {
-              await api.revokeWallet();
-              Alert.alert('', t('revoked_done'));
-            })
-          }
-        />
+        <ListItem icon="phone-portrait" tone="danger" title={t('lostDevice')} onPress={() => setRevoke('confirm')} />
+        {(revoke === 'confirm' || revoke === 'busy') && (
+          <View style={{ gap: space.sm }}>
+            <Notice tone="warning">{t('revokeConfirm')}</Notice>
+            <Button
+              title={t('revokeNow')}
+              variant="danger"
+              loading={revoke === 'busy'}
+              onPress={async () => {
+                setRevoke('busy');
+                try {
+                  await api.revokeWallet();
+                  setRevoke('done');
+                } catch (e) {
+                  setMessage((e as Error).message);
+                  setRevoke('idle');
+                }
+              }}
+            />
+            <Button title={t('cancel')} variant="ghost" onPress={() => setRevoke('idle')} />
+          </View>
+        )}
+        {revoke === 'done' && <Notice tone="success">{t('revoked_done')}</Notice>}
+        {message && <Notice tone="danger">{message}</Notice>}
       </Card>
 
       <SectionHeader>{t('privacy')}</SectionHeader>

@@ -1,4 +1,4 @@
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 
 // Neutral civic palette. Swap these tokens for the issuing government's design
 // system once the app is commissioned — no screen hard-codes colours.
@@ -46,8 +46,20 @@ const dark: typeof light = {
 
 export type Theme = typeof light;
 
+/** On the web, a host page can force a theme with <html data-theme="dark|light">. */
+function hostTheme(): 'light' | 'dark' | undefined {
+  if (Platform.OS !== 'web') return undefined;
+  try {
+    const t = globalThis.document?.documentElement.getAttribute('data-theme');
+    return t === 'dark' || t === 'light' ? t : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function useTheme(): Theme {
-  return useColorScheme() === 'dark' ? dark : light;
+  const system = useColorScheme();
+  return (hostTheme() ?? system) === 'dark' ? dark : light;
 }
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };

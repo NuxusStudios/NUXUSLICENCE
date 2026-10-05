@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { Body, Button, Field, Notice, Screen } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { useI18n } from '../../lib/i18n';
+import { DEMO_MODE } from '../../lib/config';
 
 export default function SignIn() {
   const { signIn } = useAuth();
   const { t } = useI18n();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(DEMO_MODE ? 'demo@civicpass.example' : '');
+  const [password, setPassword] = useState(DEMO_MODE ? 'Demo1234!' : '');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
 

@@ -18,3 +18,10 @@ export const APP_NAME = 'CivicPass';
 
 /** Seconds before an on-screen QR code is refreshed (server TTL is 90s). */
 export const QR_REFRESH_SECONDS = 60;
+
+/**
+ * Demo mode runs a built-in, in-memory backend (src/lib/demo) instead of
+ * calling the API, so the app works with no server. Used for the hosted web
+ * preview, store review builds and sales demos.
+ */
+export const DEMO_MODE = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';

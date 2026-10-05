@@ -29,6 +29,18 @@ docs/       Sanad research, architecture, Ontario legal/policy notes, store rele
 | **Trust & privacy** | "Who verified my ID" log, revoke all QR codes for a lost phone, Face ID / fingerprint lock, Keychain/Keystore token storage. |
 | **Bilingual** | English and French throughout. |
 
+## Try it without a server (demo mode)
+
+Set `EXPO_PUBLIC_DEMO_MODE=true` and the app runs against a built-in, in-memory copy of the backend (`apps/mobile/src/lib/demo/`). It follows the same rules as the real API: camera tickets go to the registered owner, overdue tickets block renewal, and QR codes expire and are tamper-evident. Demo mode also adds a **Simulate a red light camera ticket** button on the Tickets tab. Reloading resets the data.
+
+```bash
+cd apps/mobile
+EXPO_PUBLIC_DEMO_MODE=true npx expo start   # phone via Expo Go, no API needed
+npm run build:demo-page                     # one self-contained HTML file: dist-demo/civicpass-demo.html
+```
+
+The single-file page works offline and can be hosted anywhere as a clickable demo.
+
 ## Run it locally
 
 Prerequisites: Node 20+ and the Expo Go app on your phone (or an iOS simulator / Android emulator).
