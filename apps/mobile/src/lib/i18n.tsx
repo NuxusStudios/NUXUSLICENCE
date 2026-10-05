@@ -7,6 +7,10 @@ import { secureStorage } from './storage';
 
 const en = {
   appTagline: 'Your licences, permits and government services in one secure place.',
+  welcomeHeadline: 'Your licence and permits, in your pocket.',
+  signInSubtitle: 'Welcome back. Sign in to open your wallet.',
+  stepOf: 'Step {n} of 3',
+  sampleDocs: 'Sample documents',
   prototypeBanner: 'PROTOTYPE — not a valid government document',
   getStarted: 'Create an account',
   signIn: 'Sign in',
@@ -67,6 +71,7 @@ const en = {
 
   // wallet
   walletTitle: 'My documents',
+  documentsCount: '{n} documents',
   driver_licence: "Driver's licence",
   photo_card: 'Photo card',
   health_card: 'Health card',
@@ -193,6 +198,7 @@ const en = {
   notVerified: 'Not valid',
   cameraPermission: 'Camera access is needed to scan.',
   grantPermission: 'Allow camera',
+  comparePhoto: 'Compare the person in front of you to the photo on their screen.',
 
   // signature
   signTitle: 'Digitally sign',
@@ -230,6 +236,10 @@ export type TKey = keyof typeof en;
 
 const fr: Partial<Record<TKey, string>> = {
   appTagline: 'Vos permis, certificats et services gouvernementaux, au même endroit et en toute sécurité.',
+  welcomeHeadline: 'Vos permis et certificats, dans votre poche.',
+  signInSubtitle: 'Bon retour. Connectez-vous pour ouvrir votre portefeuille.',
+  stepOf: 'Étape {n} sur 3',
+  sampleDocs: 'Documents exemples',
   prototypeBanner: 'PROTOTYPE — document gouvernemental non valide',
   getStarted: 'Créer un compte',
   signIn: 'Se connecter',
@@ -280,6 +290,7 @@ const fr: Partial<Record<TKey, string>> = {
   signDocument: 'Signer un document',
   noRenewals: 'Rien à renouveler dans les 60 prochains jours.',
   walletTitle: 'Mes documents',
+  documentsCount: '{n} documents',
   driver_licence: 'Permis de conduire',
   photo_card: 'Carte-photo',
   health_card: 'Carte santé',
@@ -393,6 +404,7 @@ const fr: Partial<Record<TKey, string>> = {
   notVerified: 'Non valide',
   cameraPermission: "L'accès à la caméra est requis.",
   grantPermission: 'Autoriser la caméra',
+  comparePhoto: 'Comparez la personne devant vous à la photo affichée sur son écran.',
   signTitle: 'Signature numérique',
   signBody: 'Lisez le document. La signature crée un enregistrement infalsifiable lié à votre identité vérifiée.',
   signConsent: "J'ai lu ce document et j'accepte de le signer électroniquement.",

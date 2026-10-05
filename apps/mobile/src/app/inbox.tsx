@@ -1,8 +1,10 @@
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Card, Divider, Empty, ErrorState, ListItem, Loading, Screen, type IconName } from '../components/ui';
 import { api } from '../lib/api';
 import { dateTime } from '../lib/format';
 import { useI18n } from '../lib/i18n';
+import { space } from '../lib/theme';
 import type { InboxMessage } from '../lib/types';
 import { useAsync } from '../lib/useAsync';
 
@@ -10,7 +12,7 @@ const ICON: Record<InboxMessage['category'], IconName> = {
   fine: 'receipt',
   renewal: 'refresh-circle',
   service: 'checkmark-done',
-  security: 'shield',
+  security: 'shield-checkmark',
   general: 'mail',
 };
 
@@ -29,9 +31,10 @@ export default function Inbox() {
 
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <Card>
+      <Card style={{ paddingVertical: space.xs }}>
         {data!.map((m, i) => (
-          <ListItemWrap key={m.id} first={i === 0}>
+          <View key={m.id}>
+            {i > 0 && <Divider inset={52} />}
             <ListItem
               icon={ICON[m.category]}
               tone={m.read ? undefined : 'warning'}
@@ -39,18 +42,9 @@ export default function Inbox() {
               subtitle={`${m.body}\n${dateTime(m.createdAt, lang)}`}
               onPress={() => void open(m)}
             />
-          </ListItemWrap>
+          </View>
         ))}
       </Card>
     </Screen>
-  );
-}
-
-function ListItemWrap({ first, children }: { first: boolean; children: React.ReactNode }) {
-  return (
-    <>
-      {!first && <Divider />}
-      {children}
-    </>
   );
 }

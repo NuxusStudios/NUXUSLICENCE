@@ -1,12 +1,21 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+// Per-weight imports so only the faces we use are bundled (the package index pulls in all 18).
+import { HankenGrotesk_400Regular } from '@expo-google-fonts/hanken-grotesk/400Regular';
+import { HankenGrotesk_500Medium } from '@expo-google-fonts/hanken-grotesk/500Medium';
+import { HankenGrotesk_600SemiBold } from '@expo-google-fonts/hanken-grotesk/600SemiBold';
+import { HankenGrotesk_700Bold } from '@expo-google-fonts/hanken-grotesk/700Bold';
+import { HankenGrotesk_800ExtraBold } from '@expo-google-fonts/hanken-grotesk/800ExtraBold';
+import { IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono/500Medium';
+import { IBMPlexMono_600SemiBold } from '@expo-google-fonts/ibm-plex-mono/600SemiBold';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { PrototypeBanner } from '../components/PrototypeBanner';
 import { Loading } from '../components/ui';
 import { LockScreen } from '../components/LockScreen';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { I18nProvider, useI18n } from '../lib/i18n';
-import { useTheme } from '../lib/theme';
+import { fonts, useIsDark, useTheme } from '../lib/theme';
 import { APP_NAME } from '../lib/config';
 import { usePushRegistration } from '../lib/push';
 
@@ -22,9 +31,10 @@ function RootNavigator() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: c.surface },
-        headerTintColor: c.primary,
-        headerTitleStyle: { color: c.text },
+        headerStyle: { backgroundColor: c.bg },
+        headerShadowVisible: false,
+        headerTintColor: c.text,
+        headerTitleStyle: { color: c.text, fontFamily: fonts.semibold, fontSize: 17 },
         contentStyle: { backgroundColor: c.bg },
         headerBackButtonDisplayMode: 'minimal',
       }}
@@ -54,11 +64,21 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  const [loaded, error] = useFonts({
+    HankenGrotesk_400Regular,
+    HankenGrotesk_500Medium,
+    HankenGrotesk_600SemiBold,
+    HankenGrotesk_700Bold,
+    HankenGrotesk_800ExtraBold,
+    IBMPlexMono_500Medium,
+    IBMPlexMono_600SemiBold,
+  });
   return (
     <SafeAreaProvider>
       <I18nProvider>
         <AuthProvider>
-          <Shell />
+          {/* If fonts fail to load the app still runs on system fonts. */}
+          {loaded || error ? <Shell /> : <Loading />}
         </AuthProvider>
       </I18nProvider>
     </SafeAreaProvider>
@@ -67,9 +87,10 @@ export default function RootLayout() {
 
 function Shell() {
   const c = useTheme();
+  const dark = useIsDark();
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.surface }}>
-      <StatusBar style="auto" />
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
       <PrototypeBanner />
       <RootNavigator />
     </SafeAreaView>

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
-import { Body, Button, Card, ErrorState, Field, Loading, Notice, Row, Screen } from '../../components/ui';
+import { Button, Card, ErrorState, Field, Loading, Notice, Row, Screen, IconTile, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { money } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
-import { radius, space, useTheme } from '../../lib/theme';
+import { fonts, space, useTheme } from '../../lib/theme';
 import type { ServiceRequest } from '../../lib/types';
 import { useAsync } from '../../lib/useAsync';
 
@@ -51,9 +51,13 @@ export default function ServiceForm() {
   if (done) {
     return (
       <Screen>
-        <Notice tone="success">
-          {t('requestSubmitted')} · {t('reference')} {done.reference}
-        </Notice>
+        <View style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xl }}>
+          <IconTile icon="checkmark" tone="success" size={84} />
+          <Txt v="title">{t('requestSubmitted')}</Txt>
+          <Txt v="mono" muted>
+            {t('reference')} {done.reference}
+          </Txt>
+        </View>
         <Button title={t('done')} onPress={() => router.back()} />
       </Screen>
     );
@@ -61,14 +65,18 @@ export default function ServiceForm() {
 
   return (
     <Screen>
-      <Body muted>{pick(service.description)}</Body>
-      <Card>
+      <Txt v="body" muted>
+        {pick(service.description)}
+      </Txt>
+      <Card style={{ paddingVertical: space.md }}>
         <Row label={t('fee')} value={service.fee ? money(service.fee, lang) : t('free')} strong />
       </Card>
       {service.fields.map((f) =>
         f.type === 'select' ? (
           <View key={f.key} style={{ gap: space.xs }}>
-            <Text style={{ color: c.text, fontWeight: '600' }}>{pick(f.label)}</Text>
+            <Txt v="caption" muted style={{ fontFamily: fonts.semibold }}>
+              {pick(f.label)}
+            </Txt>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
               {f.options!.map((o) => {
                 const on = values[f.key] === o;
@@ -78,9 +86,11 @@ export default function ServiceForm() {
                     onPress={() => setValues((v) => ({ ...v, [f.key]: o }))}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: on }}
-                    style={{ paddingHorizontal: space.lg, paddingVertical: space.sm, borderRadius: radius.md, borderWidth: 1.5, borderColor: on ? c.primary : c.border, backgroundColor: on ? c.surfaceAlt : c.surface }}
+                    style={{ paddingHorizontal: space.lg, paddingVertical: 10, borderRadius: 999, borderWidth: 1.5, borderColor: on ? c.accent : c.border, backgroundColor: on ? c.primarySoft : c.surface }}
                   >
-                    <Text style={{ color: on ? c.primary : c.text, fontWeight: '600' }}>{o}</Text>
+                    <Txt v="strong" color={on ? c.accent : c.text}>
+                      {o}
+                    </Txt>
                   </Pressable>
                 );
               })}

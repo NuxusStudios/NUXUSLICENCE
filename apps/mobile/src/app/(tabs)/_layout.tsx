@@ -3,23 +3,25 @@ import { Tabs } from 'expo-router/tabs';
 import { Ionicons } from '@expo/vector-icons';
 import type { IconName } from '../../components/ui';
 import { useI18n } from '../../lib/i18n';
-import { useTheme } from '../../lib/theme';
+import { fonts, useTheme } from '../../lib/theme';
 
 export default function TabsLayout() {
   const { t } = useI18n();
   const c = useTheme();
+  // Filled icon when selected, outline otherwise.
   const icon = (name: IconName) =>
-    function TabIcon({ color, size }: { color: ColorValue; size: number }) {
-      return <Ionicons name={name} color={color as string} size={size} />;
+    function TabIcon({ color, focused }: { color: ColorValue; focused: boolean; size: number }) {
+      return <Ionicons name={(focused ? name : `${name}-outline`) as IconName} color={color as string} size={23} />;
     };
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: c.primary,
-        tabBarInactiveTintColor: c.textMuted,
-        tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.border },
-        headerStyle: { backgroundColor: c.surface },
-        headerTitleStyle: { color: c.text, fontWeight: '800' },
+        // Each tab screen draws its own large title.
+        headerShown: false,
+        tabBarActiveTintColor: c.text,
+        tabBarInactiveTintColor: c.textFaint,
+        tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 0.1 },
+        tabBarStyle: { backgroundColor: c.tabBar, borderTopColor: c.border, height: 64, paddingTop: 6, paddingBottom: 8 },
       }}
     >
       <Tabs.Screen name="index" options={{ title: t('tabHome'), tabBarIcon: icon('home') }} />

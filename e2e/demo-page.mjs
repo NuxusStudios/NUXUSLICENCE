@@ -61,7 +61,8 @@ await step('sign in with prefilled demo account', async () => {
 });
 await step('wallet → licence → QR', async () => {
   await app.getByRole('tab', { name: /Wallet/ }).click();
-  await text("DRIVER'S LICENCE").click();
+  // Tap the card's visible top strip; the rest is tucked under the next card in the stack.
+  await app.getByRole('button', { name: "Driver's licence", exact: true }).filter({ visible: true }).first().click({ position: { x: 60, y: 22 } });
   await btn('Show QR to verify').click();
   await text('Code refreshes in').waitFor();
   await page.frames()[1].waitForFunction(() => [...document.querySelectorAll('svg path')].some((p) => (p.getAttribute('d') ?? '').length > 2000), null, { timeout: 10000 });

@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
-import { View, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View } from 'react-native';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { space, useTheme } from '../lib/theme';
-import { Button } from './ui';
+import { Button, IconTile, Txt } from './ui';
 
 export function LockScreen() {
   const { unlock, signOut } = useAuth();
@@ -17,11 +16,11 @@ export function LockScreen() {
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.lg, padding: space.xl, backgroundColor: c.bg }}>
-      <Ionicons name="lock-closed" size={56} color={c.primary} />
-      <Text style={{ fontSize: 22, fontWeight: '800', color: c.text }}>{t('unlockTitle')}</Text>
-      <View style={{ alignSelf: 'stretch', gap: space.sm }}>
+      <IconTile icon="lock-closed" size={72} />
+      <Txt v="title">{t('unlockTitle')}</Txt>
+      <View style={{ alignSelf: 'stretch', gap: space.sm, marginTop: space.lg }}>
         <Button title={t('unlock')} icon="finger-print" onPress={() => void unlock()} />
-        <Button title={t('signOut')} variant="ghost" onPress={() => void signOut()} />
+        <Button title={t('signOut')} variant="ghost" size="md" onPress={() => void signOut()} />
       </View>
     </View>
   );

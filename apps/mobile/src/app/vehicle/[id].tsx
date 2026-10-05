@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { FineRow } from '../../components/FineRow';
-import { Button, Card, Empty, ErrorState, Loading, Notice, Row, Screen, SectionHeader } from '../../components/ui';
+import { Badge, Button, Card, Divider, Empty, ErrorState, Loading, Notice, Row, Screen, Segmented, SectionHeader, Txt } from '../../components/ui';
+import { Plate } from '../../components/Plate';
 import { api, ApiError } from '../../lib/api';
 import { date, daysUntil } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
@@ -48,32 +49,61 @@ export default function VehicleScreen() {
 
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <Card>
-        <Row label={t('plate')} value={`${v.plate} (${v.jurisdiction})`} strong />
-        <Row label="" value={`${v.year} ${v.make} ${v.model} · ${v.colour}`} />
-        <Row label={t('vin')} value={v.vin} />
-        <Row label={t('plateValidUntil')} value={`${date(v.plateValidationExpires, lang)} (${days} d)`} />
+      <Card style={{ gap: space.md }}>
+        <Plate plate={v.plate} jurisdiction={v.jurisdiction} size="lg" />
+        <View style={{ gap: 2 }}>
+          <Txt v="title">
+            {v.year} {v.make} {v.model}
+          </Txt>
+          <Txt v="callout" muted>
+            {v.colour}
+          </Txt>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Txt v="caption" muted>
+            {t('plateValidUntil')} {date(v.plateValidationExpires, lang)}
+          </Txt>
+          <Badge label={`${days} d`} tone={days < 30 ? 'warning' : 'success'} />
+        </View>
+      </Card>
+
+      <Card style={{ paddingVertical: space.md }}>
+        <Row label={t('vin')} value={v.vin} mono />
         <Row label={t('insurance')} value={`${v.insurance.provider}\n${t('policy')} ${v.insurance.policyNumber}`} />
         <Row label={t('expires')} value={date(v.insurance.expiresOn, lang)} />
       </Card>
 
       <SectionHeader>{t('renewPlate')}</SectionHeader>
-      <Card>
-        <View style={{ flexDirection: 'row', gap: space.sm }}>
-          <View style={{ flex: 1 }}>
-            <Button title={t('year1')} variant={years === 1 ? 'primary' : 'secondary'} onPress={() => setYears(1)} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Button title={t('years2')} variant={years === 2 ? 'primary' : 'secondary'} onPress={() => setYears(2)} />
-          </View>
-        </View>
+      <Card style={{ gap: space.md }}>
+        <Txt v="caption" muted>
+          {t('renewFor')}
+        </Txt>
+        <Segmented
+          value={years}
+          onChange={setYears}
+          options={[
+            { value: 1, label: t('year1') },
+            { value: 2, label: t('years2') },
+          ]}
+        />
         <Notice tone="info">{t('renewalFree')}</Notice>
         {result && <Notice tone={result.tone}>{result.text}</Notice>}
         <Button title={t('renewPlate')} icon="refresh-circle" onPress={renew} loading={busy} />
       </Card>
 
       <SectionHeader>{t('ticketsOnVehicle')}</SectionHeader>
-      <Card>{v.fines.length ? v.fines.map((f) => <FineRow key={f.id} fine={f} />) : <Empty icon="happy-outline" text={t('noTickets')} />}</Card>
+      <Card style={{ paddingVertical: space.xs }}>
+        {v.fines.length ? (
+          v.fines.map((f, i) => (
+            <View key={f.id}>
+              {i > 0 && <Divider inset={52} />}
+              <FineRow fine={f} />
+            </View>
+          ))
+        ) : (
+          <Empty icon="checkmark-done" text={t('noTickets')} />
+        )}
+      </Card>
     </Screen>
   );
 }

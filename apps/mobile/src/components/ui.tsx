@@ -1,6 +1,8 @@
-import type { ComponentProps, ReactNode } from 'react';
+import { useState, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,73 +12,200 @@ import {
   View,
   type StyleProp,
   type TextInputProps,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { radius, space, useTheme } from '../lib/theme';
+import * as Haptics from 'expo-haptics';
+import { fonts, radius, space, type, useTheme, type TypeVariant } from '../lib/theme';
 import { useI18n } from '../lib/i18n';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
-export function Screen({
-  children,
-  refreshing,
-  onRefresh,
-  padded = true,
-}: {
-  children: ReactNode;
-  refreshing?: boolean;
-  onRefresh?: () => void;
-  padded?: boolean;
-}) {
-  const c = useTheme();
-  return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: c.bg }}
-      contentContainerStyle={[padded && { padding: space.lg, paddingBottom: space.xxl * 2 }, { gap: space.lg }]}
-      refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} /> : undefined}
-      keyboardShouldPersistTaps="handled"
-    >
-      {children}
-    </ScrollView>
-  );
+const NATIVE = Platform.OS !== 'web';
+
+function tap() {
+  if (NATIVE) void Haptics.selectionAsync().catch(() => undefined);
 }
 
-export function Card({ children, style, onPress, accessibilityLabel }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void; accessibilityLabel?: string }) {
+// ---------------------------------------------------------------------------
+// Text
+// ---------------------------------------------------------------------------
+
+export function Txt({
+  v = 'body',
+  color,
+  muted,
+  faint,
+  style,
+  children,
+  ...rest
+}: ComponentProps<typeof Text> & { v?: TypeVariant; color?: string; muted?: boolean; faint?: boolean }) {
   const c = useTheme();
-  const base = [styles.card, { backgroundColor: c.surface, borderColor: c.border }, style];
-  if (!onPress) return <View style={base}>{children}</View>;
+  const tint = color ?? (faint ? c.textFaint : muted ? c.textMuted : c.text);
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => [base, pressed && { opacity: 0.85 }]}
-    >
+    <Text style={[type[v] as TextStyle, { color: tint }, style]} {...rest}>
       {children}
-    </Pressable>
+    </Text>
   );
 }
 
 export function Title({ children }: { children: ReactNode }) {
-  const c = useTheme();
-  return <Text accessibilityRole="header" style={[styles.title, { color: c.text }]}>{children}</Text>;
+  return (
+    <Txt v="title" accessibilityRole="header">
+      {children}
+    </Txt>
+  );
+}
+
+export function Body({ children, muted, style }: { children: ReactNode; muted?: boolean; style?: StyleProp<TextStyle> }) {
+  return (
+    <Txt v="body" muted={muted} style={style}>
+      {children}
+    </Txt>
+  );
 }
 
 export function SectionHeader({ children, action }: { children: ReactNode; action?: ReactNode }) {
-  const c = useTheme();
   return (
     <View style={styles.sectionHeader}>
-      <Text accessibilityRole="header" style={[styles.sectionTitle, { color: c.textMuted }]}>{children}</Text>
+      <Txt v="label" muted accessibilityRole="header">
+        {children}
+      </Txt>
       {action}
     </View>
   );
 }
 
-export function Body({ children, muted, style }: { children: ReactNode; muted?: boolean; style?: StyleProp<any> }) {
+// ---------------------------------------------------------------------------
+// Layout
+// ---------------------------------------------------------------------------
+
+/**
+ * Scrolling screen. Pass `title` for an in-page large title (used by the tab
+ * screens, which hide the native header).
+ */
+export function Screen({
+  children,
+  refreshing,
+  onRefresh,
+  title,
+  subtitle,
+  right,
+}: {
+  children: ReactNode;
+  refreshing?: boolean;
+  onRefresh?: () => void;
+  title?: string;
+  subtitle?: string;
+  right?: ReactNode;
+}) {
   const c = useTheme();
-  return <Text style={[styles.body, { color: muted ? c.textMuted : c.text }, style]}>{children}</Text>;
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      contentContainerStyle={styles.screen}
+      refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.textMuted} /> : undefined}
+      keyboardShouldPersistTaps="handled"
+    >
+      {title ? (
+        <View style={styles.largeHeader}>
+          <View style={{ flex: 1, gap: 2 }}>
+            {subtitle ? <Txt v="caption" muted>{subtitle}</Txt> : null}
+            <Txt v="display" accessibilityRole="header">
+              {title}
+            </Txt>
+          </View>
+          {right}
+        </View>
+      ) : null}
+      {children}
+    </ScrollView>
+  );
 }
+
+/** Pressable that gives a gentle scale-down and a haptic tick. */
+export function PressScale({
+  children,
+  onPress,
+  style,
+  containerStyle,
+  disabled,
+  accessibilityLabel,
+  accessibilityRole = 'button',
+  accessibilityState,
+  scaleTo = 0.975,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+  /** Visual styles; these scale on press. */
+  style?: StyleProp<ViewStyle>;
+  /** Layout in the parent (width, margins). Applied to the pressable itself so the parent sizes it correctly. */
+  containerStyle?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+  accessibilityLabel?: string;
+  accessibilityRole?: ComponentProps<typeof Pressable>['accessibilityRole'];
+  accessibilityState?: ComponentProps<typeof Pressable>['accessibilityState'];
+  scaleTo?: number;
+}) {
+  const [scale] = useState(() => new Animated.Value(1));
+  const to = (v: number) => Animated.spring(scale, { toValue: v, useNativeDriver: NATIVE, speed: 40, bounciness: 4 }).start();
+  return (
+    <Pressable
+      onPress={() => {
+        tap();
+        onPress?.();
+      }}
+      onPressIn={() => to(scaleTo)}
+      onPressOut={() => to(1)}
+      disabled={disabled}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={accessibilityState}
+      style={containerStyle}
+    >
+      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
+    </Pressable>
+  );
+}
+
+export function Card({
+  children,
+  style,
+  onPress,
+  accessibilityLabel,
+  flush,
+}: {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  onPress?: () => void;
+  accessibilityLabel?: string;
+  /** No inner padding, for lists that manage their own insets. */
+  flush?: boolean;
+}) {
+  const c = useTheme();
+  const base: StyleProp<ViewStyle> = [
+    styles.card,
+    { backgroundColor: c.surface, borderColor: c.hairline, boxShadow: c.shadow },
+    flush && { padding: 0, gap: 0 },
+    style,
+  ];
+  if (!onPress) return <View style={base}>{children}</View>;
+  return (
+    <PressScale onPress={onPress} accessibilityLabel={accessibilityLabel} style={base}>
+      {children}
+    </PressScale>
+  );
+}
+
+export function Divider({ inset = 0 }: { inset?: number }) {
+  const c = useTheme();
+  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border, marginLeft: inset }} />;
+}
+
+// ---------------------------------------------------------------------------
+// Controls
+// ---------------------------------------------------------------------------
 
 export function Button({
   title,
@@ -85,67 +214,154 @@ export function Button({
   icon,
   loading,
   disabled,
+  size = 'lg',
 }: {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'black';
   icon?: IconName;
   loading?: boolean;
   disabled?: boolean;
+  size?: 'lg' | 'md';
 }) {
   const c = useTheme();
   const palette = {
     primary: { bg: c.primary, fg: c.primaryText, border: c.primary },
-    secondary: { bg: c.surface, fg: c.primary, border: c.border },
+    secondary: { bg: c.surface, fg: c.text, border: c.border },
     danger: { bg: c.dangerBg, fg: c.danger, border: c.dangerBg },
-    ghost: { bg: 'transparent', fg: c.primary, border: 'transparent' },
+    ghost: { bg: 'transparent', fg: c.accent, border: 'transparent' },
+    black: { bg: '#000000', fg: '#FFFFFF', border: '#000000' },
   }[variant];
   const inactive = disabled || loading;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !!inactive, busy: !!loading }}
-      disabled={inactive}
+    <PressScale
       onPress={onPress}
-      style={({ pressed }) => [
+      disabled={inactive}
+      accessibilityState={{ disabled: !!inactive, busy: !!loading }}
+      style={[
         styles.button,
-        { backgroundColor: palette.bg, borderColor: palette.border, opacity: inactive ? 0.55 : pressed ? 0.85 : 1 },
+        size === 'md' && { minHeight: 44, borderRadius: radius.sm },
+        { backgroundColor: palette.bg, borderColor: palette.border, opacity: inactive ? 0.5 : 1 },
+        variant === 'primary' && !inactive && { boxShadow: c.shadow },
       ]}
     >
       {loading ? (
         <ActivityIndicator color={palette.fg} />
       ) : (
         <>
-          {icon && <Ionicons name={icon} size={18} color={palette.fg} />}
+          {icon && <Ionicons name={icon} size={19} color={palette.fg} />}
           <Text style={[styles.buttonText, { color: palette.fg }]}>{title}</Text>
         </>
       )}
-    </Pressable>
+    </PressScale>
   );
 }
 
-export function Field({ label, error, ...props }: TextInputProps & { label: string; error?: string }) {
+/** iOS-style segmented control. */
+export function Segmented<T extends string | number>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
   const c = useTheme();
   return (
-    <View style={{ gap: space.xs }}>
-      <Text style={[styles.label, { color: c.text }]}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        placeholderTextColor={c.textMuted}
-        style={[styles.input, { color: c.text, backgroundColor: c.surface, borderColor: error ? c.danger : c.border }]}
-        {...props}
-      />
-      {error ? <Text style={{ color: c.danger, fontSize: 13 }}>{error}</Text> : null}
+    <View style={[styles.segmented, { backgroundColor: c.surfaceAlt }]} accessibilityRole="tablist">
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={String(o.value)}
+            onPress={() => {
+              tap();
+              onChange(o.value);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            style={[styles.segment, on && { backgroundColor: c.surface, boxShadow: c.shadow }]}
+          >
+            <Text style={[styles.segmentText, { color: on ? c.text : c.textMuted, fontFamily: on ? fonts.semibold : fonts.medium }]}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
-export function Row({ label, value, strong }: { label: string; value?: ReactNode; strong?: boolean }) {
+export function Field({ label, error, style, ...props }: TextInputProps & { label: string; error?: string }) {
+  const c = useTheme();
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={{ gap: 6 }}>
+      <Txt v="caption" muted style={{ fontFamily: fonts.semibold }}>
+        {label}
+      </Txt>
+      <TextInput
+        accessibilityLabel={label}
+        placeholderTextColor={c.textFaint}
+        onFocus={(e) => {
+          setFocused(true);
+          props.onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          props.onBlur?.(e);
+        }}
+        style={[
+          styles.input,
+          {
+            color: c.text,
+            backgroundColor: c.surface,
+            borderColor: error ? c.danger : focused ? c.accent : c.border,
+            boxShadow: focused ? `0px 0px 0px 3px ${c.primarySoft}` : 'none',
+          },
+          style,
+        ]}
+        {...props}
+      />
+      {error ? <Txt v="caption" color={c.danger}>{error}</Txt> : null}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Data display
+// ---------------------------------------------------------------------------
+
+export function Row({ label, value, strong, mono }: { label: string; value?: ReactNode; strong?: boolean; mono?: boolean }) {
   const c = useTheme();
   return (
     <View style={styles.row}>
-      <Text style={[styles.rowLabel, { color: c.textMuted }]}>{label}</Text>
-      <Text style={[styles.rowValue, { color: c.text }, strong && { fontWeight: '700', fontSize: 17 }]}>{value ?? '—'}</Text>
+      <Txt v="caption" muted style={styles.rowLabel}>
+        {label}
+      </Txt>
+      <Text
+        style={[
+          strong ? type.headline : mono ? { ...type.mono, fontSize: 14 } : type.callout,
+          { color: c.text, flex: 1, textAlign: 'right', fontVariant: ['tabular-nums'] },
+        ]}
+      >
+        {value ?? '—'}
+      </Text>
+    </View>
+  );
+}
+
+export function IconTile({ icon, tone, size = 40 }: { icon: IconName; tone?: 'danger' | 'warning' | 'success' | 'accent'; size?: number }) {
+  const c = useTheme();
+  const map = {
+    danger: [c.dangerBg, c.danger],
+    warning: [c.warningBg, c.warning],
+    success: [c.successBg, c.success],
+    accent: [c.primarySoft, c.accent],
+  } as const;
+  const [bg, fg] = map[tone ?? 'accent'];
+  return (
+    <View style={{ width: size, height: size, borderRadius: size * 0.32, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name={icon} size={size * 0.5} color={fg} />
     </View>
   );
 }
@@ -166,32 +382,29 @@ export function ListItem({
   tone?: 'danger' | 'warning' | 'success';
 }) {
   const c = useTheme();
-  const iconColor = tone === 'danger' ? c.danger : tone === 'warning' ? c.warning : tone === 'success' ? c.success : c.primary;
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? 'button' : undefined}
-      style={({ pressed }) => [styles.listItem, pressed && { opacity: 0.7 }]}
-    >
-      {icon && (
-        <View style={[styles.listIcon, { backgroundColor: c.surfaceAlt }]}>
-          <Ionicons name={icon} size={20} color={iconColor} />
-        </View>
-      )}
+  const content = (
+    <>
+      {icon && <IconTile icon={icon} tone={tone} />}
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={[styles.listTitle, { color: c.text }]} numberOfLines={2}>{title}</Text>
-        {subtitle ? <Text style={{ color: c.textMuted, fontSize: 13 }} numberOfLines={2}>{subtitle}</Text> : null}
+        <Txt v="strong" numberOfLines={2}>
+          {title}
+        </Txt>
+        {subtitle ? (
+          <Txt v="caption" muted numberOfLines={3}>
+            {subtitle}
+          </Txt>
+        ) : null}
       </View>
       {right}
-      {onPress && <Ionicons name="chevron-forward" size={18} color={c.textMuted} />}
-    </Pressable>
+      {onPress && <Ionicons name="chevron-forward" size={17} color={c.textFaint} />}
+    </>
   );
-}
-
-export function Divider() {
-  const c = useTheme();
-  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border, marginVertical: space.xs }} />;
+  if (!onPress) return <View style={styles.listItem}>{content}</View>;
+  return (
+    <PressScale onPress={onPress} style={styles.listItem} scaleTo={0.985}>
+      {content}
+    </PressScale>
+  );
 }
 
 export function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'danger' | 'warning' | 'success' | 'info' }) {
@@ -201,45 +414,13 @@ export function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neut
     danger: [c.dangerBg, c.danger],
     warning: [c.warningBg, c.warning],
     success: [c.successBg, c.success],
-    info: [c.surfaceAlt, c.primary],
+    info: [c.primarySoft, c.accent],
   } as const;
   const [bg, fg] = map[tone];
   return (
     <View style={[styles.badge, { backgroundColor: bg }]}>
-      <Text style={{ color: fg, fontSize: 12, fontWeight: '700' }}>{label}</Text>
-    </View>
-  );
-}
-
-export function Loading() {
-  const { t } = useI18n();
-  const c = useTheme();
-  return (
-    <View style={[styles.center, { backgroundColor: c.bg }]}>
-      <ActivityIndicator color={c.primary} />
-      <Text style={{ color: c.textMuted, marginTop: space.sm }}>{t('loading')}</Text>
-    </View>
-  );
-}
-
-export function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
-  const { t } = useI18n();
-  const c = useTheme();
-  return (
-    <View style={[styles.center, { backgroundColor: c.bg, padding: space.xl, gap: space.md }]}>
-      <Ionicons name="cloud-offline-outline" size={40} color={c.textMuted} />
-      <Text style={{ color: c.text, textAlign: 'center' }}>{error.message}</Text>
-      <Button title={t('retry')} onPress={onRetry} variant="secondary" />
-    </View>
-  );
-}
-
-export function Empty({ icon, text }: { icon: IconName; text: string }) {
-  const c = useTheme();
-  return (
-    <View style={{ alignItems: 'center', padding: space.xl, gap: space.sm }}>
-      <Ionicons name={icon} size={36} color={c.textMuted} />
-      <Text style={{ color: c.textMuted, textAlign: 'center' }}>{text}</Text>
+      <View style={[styles.badgeDot, { backgroundColor: fg }]} />
+      <Text style={{ color: fg, fontSize: 12, fontFamily: fonts.semibold, letterSpacing: 0.2 }}>{label}</Text>
     </View>
   );
 }
@@ -250,25 +431,66 @@ export function Notice({ tone, children }: { tone: 'danger' | 'warning' | 'succe
     danger: [c.dangerBg, c.danger, 'alert-circle'],
     warning: [c.warningBg, c.warning, 'warning'],
     success: [c.successBg, c.success, 'checkmark-circle'],
-    info: [c.surfaceAlt, c.primary, 'information-circle'],
+    info: [c.primarySoft, c.accent, 'information-circle'],
   } as const;
   const [bg, fg, icon] = map[tone];
   return (
     <View style={[styles.notice, { backgroundColor: bg }]} accessibilityRole="alert">
-      <Ionicons name={icon} size={20} color={fg} />
-      <Text style={{ color: fg, flex: 1, fontSize: 14, lineHeight: 20 }}>{children}</Text>
+      <Ionicons name={icon} size={20} color={fg} style={{ marginTop: 1 }} />
+      <Text style={[type.callout, { color: fg, flex: 1 }]}>{children}</Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// States
+// ---------------------------------------------------------------------------
+
+export function Loading() {
+  const { t } = useI18n();
+  const c = useTheme();
+  return (
+    <View style={[styles.center, { backgroundColor: c.bg, gap: space.md }]}>
+      <ActivityIndicator color={c.textMuted} />
+      <Txt v="caption" muted>
+        {t('loading')}
+      </Txt>
+    </View>
+  );
+}
+
+export function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
+  const { t } = useI18n();
+  const c = useTheme();
+  return (
+    <View style={[styles.center, { backgroundColor: c.bg, padding: space.xl, gap: space.lg }]}>
+      <IconTile icon="cloud-offline-outline" size={56} />
+      <Txt v="body" style={{ textAlign: 'center' }}>
+        {error.message}
+      </Txt>
+      <Button title={t('retry')} onPress={onRetry} variant="secondary" size="md" />
+    </View>
+  );
+}
+
+export function Empty({ icon, text }: { icon: IconName; text: string }) {
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: space.xxl, paddingHorizontal: space.xl, gap: space.md }}>
+      <IconTile icon={icon} size={52} tone="success" />
+      <Txt v="callout" muted style={{ textAlign: 'center' }}>
+        {text}
+      </Txt>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { padding: space.lg, paddingBottom: space.xxl * 2.5, gap: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' },
+  largeHeader: { flexDirection: 'row', alignItems: 'flex-end', gap: space.md, paddingTop: space.sm, paddingBottom: space.xs },
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: space.sm },
-  title: { fontSize: 26, fontWeight: '800' },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.sm },
-  sectionTitle: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
-  body: { fontSize: 15, lineHeight: 22 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.md, marginBottom: -space.xs, paddingHorizontal: 2 },
   button: {
-    minHeight: 50,
+    minHeight: 54,
     borderRadius: radius.md,
     borderWidth: 1,
     paddingHorizontal: space.lg,
@@ -277,16 +499,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space.sm,
   },
-  buttonText: { fontSize: 16, fontWeight: '700' },
-  label: { fontSize: 14, fontWeight: '600' },
-  input: { minHeight: 48, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.md, fontSize: 16 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: space.lg, paddingVertical: 6 },
-  rowLabel: { fontSize: 14, flexShrink: 0, maxWidth: '45%' },
-  rowValue: { fontSize: 15, fontWeight: '500', flex: 1, textAlign: 'right' },
-  listItem: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm, minHeight: 52 },
-  listIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  listTitle: { fontSize: 15, fontWeight: '600' },
-  badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, alignSelf: 'flex-start' },
+  buttonText: { fontSize: 16, fontFamily: fonts.semibold, letterSpacing: -0.1 },
+  segmented: { flexDirection: 'row', borderRadius: radius.md, padding: 3, gap: 3 },
+  segment: { flex: 1, minHeight: 38, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm },
+  segmentText: { fontSize: 14 },
+  input: { minHeight: 52, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.lg, fontSize: 16, fontFamily: fonts.medium },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.lg, paddingVertical: 7 },
+  rowLabel: { flexShrink: 0, maxWidth: '45%' },
+  listItem: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md, minHeight: 60 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
+  badgeDot: { width: 6, height: 6, borderRadius: 3 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  notice: { flexDirection: 'row', gap: space.sm, padding: space.md, borderRadius: radius.md, alignItems: 'flex-start' },
+  notice: { flexDirection: 'row', gap: space.sm, padding: space.md, paddingHorizontal: space.lg, borderRadius: radius.md, alignItems: 'flex-start' },
 });

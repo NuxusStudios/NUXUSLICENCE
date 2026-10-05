@@ -58,7 +58,7 @@ await step('wallet shows licence, health card, two vehicle permits', async () =>
 });
 
 await step('licence detail + QR presentation (full)', async () => {
-  await text("DRIVER'S LICENCE").click();
+  await page.getByRole('button', { name: "Driver's licence", exact: true }).first().click({ position: { x: 60, y: 22 } });
   await btn('Show QR to verify').click();
   await text('Code refreshes in').waitFor();
   await page.waitForFunction(() => [...document.querySelectorAll('svg path')].some((p) => (p.getAttribute('d') ?? '').length > 2000), null, { timeout: 10000 });

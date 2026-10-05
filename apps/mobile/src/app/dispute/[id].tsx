@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Body, Button, Field, Notice, Screen, Title } from '../../components/ui';
+import { Button, Field, IconTile, Notice, PressScale, Screen, Txt, type IconName } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
 import { radius, space, useTheme } from '../../lib/theme';
@@ -33,38 +33,62 @@ export default function Dispute() {
   if (reference) {
     return (
       <Screen>
-        <Notice tone="success">
-          {t('disputeSent')} {reference}
-        </Notice>
+        <View style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xl }}>
+          <IconTile icon="checkmark" tone="success" size={84} />
+          <Txt v="title" style={{ textAlign: 'center' }}>
+            {t('disputeSent')}
+          </Txt>
+          <Txt v="mono" muted>
+            {reference}
+          </Txt>
+        </View>
         <Button title={t('done')} onPress={() => router.back()} />
       </Screen>
     );
   }
 
-  const choices = [
-    { key: 'early_resolution' as const, title: t('earlyResolution'), body: t('earlyResolutionBody') },
-    { key: 'trial' as const, title: t('trial'), body: t('trialBody') },
+  const choices: { key: 'early_resolution' | 'trial'; icon: IconName; title: string; body: string }[] = [
+    { key: 'early_resolution', icon: 'people', title: t('earlyResolution'), body: t('earlyResolutionBody') },
+    { key: 'trial', icon: 'hammer', title: t('trial'), body: t('trialBody') },
   ];
 
   return (
     <Screen>
-      <Title>{t('disputeTitle')}</Title>
-      {choices.map((ch) => (
-        <Pressable
-          key={ch.key}
-          onPress={() => setOption(ch.key)}
-          accessibilityRole="radio"
-          accessibilityState={{ checked: option === ch.key }}
-          style={{ flexDirection: 'row', gap: space.md, padding: space.lg, borderRadius: radius.md, borderWidth: 2, borderColor: option === ch.key ? c.primary : c.border, backgroundColor: c.surface }}
-        >
-          <Ionicons name={option === ch.key ? 'radio-button-on' : 'radio-button-off'} size={22} color={c.primary} />
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }}>{ch.title}</Text>
-            <Body muted>{ch.body}</Body>
-          </View>
-        </Pressable>
-      ))}
-      <Field label={t('disputeReason')} value={reason} onChangeText={setReason} multiline style={{ minHeight: 110, textAlignVertical: 'top', paddingTop: 12 }} />
+      <Txt v="title" accessibilityRole="header">
+        {t('disputeTitle')}
+      </Txt>
+      {choices.map((ch) => {
+        const on = option === ch.key;
+        return (
+          <PressScale
+            key={ch.key}
+            onPress={() => setOption(ch.key)}
+            accessibilityRole="radio"
+            accessibilityLabel={ch.title}
+            accessibilityState={{ checked: on }}
+            scaleTo={0.985}
+            style={{
+              flexDirection: 'row',
+              gap: space.md,
+              padding: space.lg,
+              borderRadius: radius.lg,
+              borderWidth: 1.5,
+              borderColor: on ? c.accent : c.border,
+              backgroundColor: on ? c.primarySoft : c.surface,
+            }}
+          >
+            <IconTile icon={ch.icon} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Txt v="strong">{ch.title}</Txt>
+              <Txt v="caption" muted>
+                {ch.body}
+              </Txt>
+            </View>
+            <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={on ? c.accent : c.textFaint} />
+          </PressScale>
+        );
+      })}
+      <Field label={t('disputeReason')} value={reason} onChangeText={setReason} multiline style={{ minHeight: 120, textAlignVertical: 'top', paddingTop: 14 }} />
       {error && <Notice tone="danger">{error}</Notice>}
       <Button title={t('submit')} onPress={submit} loading={busy} disabled={reason.trim().length < 10} />
     </Screen>

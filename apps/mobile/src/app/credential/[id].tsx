@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
-import { Body, Button, Card, ErrorState, Loading, Notice, Row, Screen, SectionHeader } from '../../components/ui';
+import { Button, Card, Divider, ErrorState, Loading, Notice, Row, Screen, SectionHeader, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { QR_REFRESH_SECONDS } from '../../lib/config';
 import { date } from '../../lib/format';
 import { useI18n, type TKey } from '../../lib/i18n';
-import { radius, space, useTheme } from '../../lib/theme';
+import { fonts, radius, space, useTheme } from '../../lib/theme';
 import type { Credential, Disclosure } from '../../lib/types';
 import { useAsync } from '../../lib/useAsync';
 
@@ -47,7 +48,7 @@ export default function CredentialScreen() {
       )}
 
       <SectionHeader>{t('status')}</SectionHeader>
-      <Card>
+      <Card style={{ paddingVertical: space.md }}>
         <Row label={t('status')} value={t(cred.status)} />
         <Row label={t('issued')} value={date(cred.issuedOn, lang)} />
         <Row label={t('expires')} value={date(cred.expiresOn, lang)} />
@@ -55,8 +56,8 @@ export default function CredentialScreen() {
         {cred.conditions?.length ? <Row label={t('conditions')} value={cred.conditions.join('\n')} /> : null}
         {cred.vehicle ? (
           <>
-            <Row label={t('plate')} value={cred.vehicle.plate} />
-            <Row label={t('vin')} value={cred.vehicle.vin} />
+            <Row label={t('plate')} value={cred.vehicle.plate} mono />
+            <Row label={t('vin')} value={cred.vehicle.vin} mono />
           </>
         ) : (
           <>
@@ -128,32 +129,63 @@ function Presentation({ credential, onClose }: { credential: Credential; onClose
   }
 
   return (
-    <Card>
-      <Text style={{ color: c.text, fontWeight: '700', fontSize: 16 }}>{t('whatToShare')}</Text>
-      <View style={{ gap: space.xs }}>
-        {options.map((o) => (
-          <Pressable
-            key={o}
-            onPress={() => choose(o)}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: disclosure === o }}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 6 }}
-          >
-            <Ionicons name={disclosure === o ? 'radio-button-on' : 'radio-button-off'} size={20} color={c.primary} />
-            <Text style={{ color: c.text, fontSize: 15 }}>{t(`disclosure_${o}` as TKey)}</Text>
-          </Pressable>
-        ))}
+    <Card style={{ gap: space.md }}>
+      <Txt v="headline">{t('whatToShare')}</Txt>
+      <View>
+        {options.map((o, i) => {
+          const on = disclosure === o;
+          return (
+            <View key={o}>
+              {i > 0 && <Divider inset={34} />}
+              <Pressable
+                onPress={() => choose(o)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 11 }}
+              >
+                <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={on ? c.accent : c.textFaint} />
+                <Txt v={on ? 'strong' : 'callout'}>{t(`disclosure_${o}` as TKey)}</Txt>
+              </Pressable>
+            </View>
+          );
+        })}
       </View>
 
-      <View style={{ alignItems: 'center', padding: space.lg, backgroundColor: '#fff', borderRadius: radius.md, minHeight: 280, justifyContent: 'center' }}>
-        {error ? <Text style={{ color: c.danger }}>{error}</Text> : token ? <QRCode value={token} size={250} ecl="L" /> : <ActivityIndicator />}
+      {/* The code sits on white in both themes so any scanner can read it. */}
+      <View style={{ alignItems: 'center', padding: space.xl, backgroundColor: '#FFFFFF', borderRadius: radius.lg, minHeight: 300, justifyContent: 'center', borderWidth: 1, borderColor: c.border }}>
+        {error ? <Txt v="callout" color={c.danger}>{error}</Txt> : token ? <QRCode value={token} size={240} ecl="L" color="#0D1522" /> : <ActivityIndicator color="#5F6B7D" />}
       </View>
-      <Text style={{ color: c.textMuted, textAlign: 'center' }} accessibilityLiveRegion="polite">
-        {t('qrExpiresIn')} {remaining}
-        {t('seconds')}
-      </Text>
-      <Body muted>{t('qrHelp')}</Body>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, justifyContent: 'center' }} accessibilityLiveRegion="polite">
+        <CountdownRing remaining={remaining} total={QR_REFRESH_SECONDS} />
+        <Txt v="callout" muted>
+          {t('qrExpiresIn')} {remaining}
+          {t('seconds')}
+        </Txt>
+      </View>
+      <Txt v="caption" muted style={{ textAlign: 'center' }}>
+        {t('qrHelp')}
+      </Txt>
       <Button title={t('done')} variant="secondary" onPress={onClose} />
     </Card>
+  );
+}
+
+/** Small ring that empties as the QR code approaches its refresh. */
+function CountdownRing({ remaining, total }: { remaining: number; total: number }) {
+  const c = useTheme();
+  const r = 11;
+  const circ = 2 * Math.PI * r;
+  const frac = Math.max(0, Math.min(1, remaining / total));
+  return (
+    <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={28} height={28} viewBox="0 0 28 28" style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
+        <Circle cx={14} cy={14} r={r} stroke={c.border} strokeWidth={3} fill="none" />
+        <Circle cx={14} cy={14} r={r} stroke={frac < 0.2 ? c.warning : c.accent} strokeWidth={3} fill="none" strokeDasharray={`${circ}`} strokeDashoffset={circ * (1 - frac)} strokeLinecap="round" />
+      </Svg>
+      <Txt v="caption" style={{ fontFamily: fonts.bold, fontSize: 9 }}>
+        {remaining}
+      </Txt>
+    </View>
   );
 }

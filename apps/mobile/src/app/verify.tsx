@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { Body, Button, Card, Field, Notice, Row, Screen } from '../components/ui';
+import { Body, Button, Card, Field, Notice, Row, Screen, Txt } from '../components/ui';
 import { api } from '../lib/api';
 import { date } from '../lib/format';
 import { useI18n, type TKey } from '../lib/i18n';
-import { radius, space, useTheme } from '../lib/theme';
+import { fonts, radius, space, useTheme } from '../lib/theme';
 import type { VerifyResult } from '../lib/types';
 
 const CLAIM_LABEL: Record<string, TKey> = {
@@ -66,7 +66,9 @@ export default function Verify() {
 
   return (
     <Screen>
-      <Body muted>{t('verifyBody')}</Body>
+      <Txt v="body" muted>
+        {t('verifyBody')}
+      </Txt>
       <Field label={t('verifierName')} value={verifier} onChangeText={setVerifier} placeholder="e.g. Example Police Service" />
 
       {canScan &&
@@ -92,26 +94,38 @@ export default function Verify() {
           />
         ))}
 
-      <Field label={t('pasteToken')} value={token} onChangeText={setToken} autoCapitalize="none" autoCorrect={false} multiline style={{ minHeight: 70, fontSize: 12, paddingTop: 10 }} />
+      <Field label={t('pasteToken')} value={token} onChangeText={setToken} autoCapitalize="none" autoCorrect={false} multiline style={{ minHeight: 80, fontSize: 12, paddingTop: 12, fontFamily: fonts.mono }} />
       <Button title={t('verifyNow')} variant="secondary" onPress={() => verify(token)} loading={busy} disabled={token.length < 20} />
 
       {result && (
-        <Card style={{ borderColor: result.valid ? c.success : c.danger, borderWidth: 2 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-            <Ionicons name={result.valid ? 'checkmark-circle' : 'close-circle'} size={36} color={result.valid ? c.success : c.danger} />
-            <Text style={{ fontSize: 22, fontWeight: '800', color: result.valid ? c.success : c.danger }}>{result.valid ? t('verified') : t('notVerified')}</Text>
+        <Card flush style={{ overflow: 'hidden' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, backgroundColor: result.valid ? c.successBg : c.dangerBg }}>
+            <Ionicons name={result.valid ? 'shield-checkmark' : 'close-circle'} size={40} color={result.valid ? c.success : c.danger} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Txt v="title" color={result.valid ? c.success : c.danger}>
+                {result.valid ? t('verified') : t('notVerified')}
+              </Txt>
+              {result.valid && result.credentialType ? (
+                <Txt v="callout" color={c.success}>
+                  {t(result.credentialType)}
+                </Txt>
+              ) : null}
+            </View>
           </View>
-          {result.valid ? (
-            <>
-              {result.credentialType && <Row label="" value={t(result.credentialType)} strong />}
-              {Object.entries(result.claims ?? {}).map(([k, v]) => (
-                <Row key={k} label={CLAIM_LABEL[k] ? t(CLAIM_LABEL[k]).split(' (')[0]! : k} value={formatClaim(k, v, lang)} />
-              ))}
-              {result.claims?.photo === true && <Notice tone="info">Compare the person to the photo on their screen.</Notice>}
-            </>
-          ) : (
-            <Notice tone="danger">{result.reason}</Notice>
-          )}
+          <View style={{ padding: space.lg, paddingTop: space.md, gap: space.sm }}>
+            {result.valid ? (
+              <>
+                {Object.entries(result.claims ?? {}).map(([k, v]) => (
+                  <Row key={k} label={CLAIM_LABEL[k] ? t(CLAIM_LABEL[k]).split(' (')[0]! : k} value={formatClaim(k, v, lang)} mono={k === 'documentNumber'} />
+                ))}
+                {result.claims?.photo === true && <Notice tone="info">{t('comparePhoto')}</Notice>}
+              </>
+            ) : (
+              <Txt v="mono" color={c.danger}>
+                {result.reason}
+              </Txt>
+            )}
+          </View>
         </Card>
       )}
     </Screen>

@@ -21,7 +21,7 @@ let js = fs.readFileSync(path.join(jsDir, entry), 'utf8');
 const MIME = { '.png': 'image/png', '.ttf': 'font/ttf' };
 // Inline the assets the app really uses. Other icon fonts bundled by
 // @expo/vector-icons are never loaded, so they're left as (unused) paths.
-const KEEP = [/\/Fonts\/Ionicons\.[a-f0-9]+\.ttf$/, /\/expo-router\/assets\/.*\.png$/];
+const KEEP = [/\/Fonts\/Ionicons\.[a-f0-9]+\.ttf$/, /\/expo-router\/assets\/.*\.png$/, /\/@expo-google-fonts\/.*\.ttf$/];
 let inlined = 0;
 let bytes = 0;
 js = js.replace(/"(\/assets\/[^"]+)"/g, (whole, url) => {

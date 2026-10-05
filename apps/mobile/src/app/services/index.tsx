@@ -1,8 +1,10 @@
+import { View } from 'react-native';
 import { router } from 'expo-router';
-import { Badge, Card, ErrorState, ListItem, Loading, Screen, SectionHeader, type IconName } from '../../components/ui';
+import { Badge, Card, Divider, ErrorState, ListItem, Loading, Screen, SectionHeader, type IconName } from '../../components/ui';
 import { api } from '../../lib/api';
 import { date, money } from '../../lib/format';
 import { useI18n, type TKey } from '../../lib/i18n';
+import { space } from '../../lib/theme';
 import type { ServiceDefinition } from '../../lib/types';
 import { useAsync } from '../../lib/useAsync';
 
@@ -24,41 +26,50 @@ export default function Services() {
 
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      {categories.map((cat) => (
-        <Card key={cat}>
-          <SectionHeader>{t(`category_${cat}` as TKey)}</SectionHeader>
-          {services
-            .filter((s) => s.category === cat)
-            .map((s) => (
-              <ListItem
-                key={s.id}
-                icon={CATEGORY_ICON[cat]}
-                title={pick(s.name)}
-                subtitle={pick(s.description)}
-                right={<Badge label={s.fee ? money(s.fee, lang) : t('free')} tone={s.fee ? 'neutral' : 'success'} />}
-                onPress={() => router.push(`/services/${s.id}`)}
-              />
-            ))}
-        </Card>
-      ))}
-
       {requests.length > 0 && (
-        <Card>
+        <>
           <SectionHeader>{t('myRequests')}</SectionHeader>
-          {requests.map((r) => {
-            const s = services.find((x) => x.id === r.serviceId);
-            return (
-              <ListItem
-                key={r.id}
-                icon="time-outline"
-                title={s ? pick(s.name) : r.serviceId}
-                subtitle={`${t('reference')} ${r.reference} · ${date(r.createdAt, lang)}`}
-                right={<Badge label={r.status} tone={r.status === 'completed' ? 'success' : 'info'} />}
-              />
-            );
-          })}
-        </Card>
+          <Card style={{ paddingVertical: space.xs }}>
+            {requests.map((r, i) => {
+              const s = services.find((x) => x.id === r.serviceId);
+              return (
+                <View key={r.id}>
+                  {i > 0 && <Divider inset={52} />}
+                  <ListItem
+                    icon={r.status === 'completed' ? 'checkmark-done' : 'time'}
+                    tone={r.status === 'completed' ? 'success' : undefined}
+                    title={s ? pick(s.name) : r.serviceId}
+                    subtitle={`${t('reference')} ${r.reference} · ${date(r.createdAt, lang)}`}
+                    right={<Badge label={r.status} tone={r.status === 'completed' ? 'success' : 'info'} />}
+                  />
+                </View>
+              );
+            })}
+          </Card>
+        </>
       )}
+
+      {categories.map((cat) => (
+        <View key={cat} style={{ gap: space.lg }}>
+          <SectionHeader>{t(`category_${cat}` as TKey)}</SectionHeader>
+          <Card style={{ paddingVertical: space.xs }}>
+            {services
+              .filter((s) => s.category === cat)
+              .map((s, i) => (
+                <View key={s.id}>
+                  {i > 0 && <Divider inset={52} />}
+                  <ListItem
+                    icon={CATEGORY_ICON[cat]}
+                    title={pick(s.name)}
+                    subtitle={pick(s.description)}
+                    right={<Badge label={s.fee ? money(s.fee, lang) : t('free')} tone={s.fee ? 'neutral' : 'success'} />}
+                    onPress={() => router.push(`/services/${s.id}`)}
+                  />
+                </View>
+              ))}
+          </Card>
+        </View>
+      ))}
     </Screen>
   );
 }
