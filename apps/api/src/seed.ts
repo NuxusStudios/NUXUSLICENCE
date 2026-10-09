@@ -70,6 +70,8 @@ export async function seed(store: Store): Promise<void> {
     expiresOn: '2027-05-14',
     status: 'valid',
     licenceClass: 'G, M',
+    discriminator: 'DD7K41093',
+    controlNumber: 'CP0041977',
     conditions: ['X — corrective lenses'],
   });
   store.credentials.set('cred_alex_hc', {
@@ -77,6 +79,7 @@ export async function seed(store: Store): Promise<void> {
     personId: alex.id,
     type: 'health_card',
     documentNumber: '9876-543-210-XY',
+    discriminator: 'HC2209318',
     issuedOn: '2021-05-14',
     expiresOn: '2026-11-14',
     status: 'valid',
@@ -257,6 +260,8 @@ export async function seed(store: Store): Promise<void> {
     expiresOn: '2028-03-02',
     status: 'valid',
     licenceClass: 'G',
+    discriminator: 'DD3Q88214',
+    controlNumber: 'CP0090512',
   });
   store.credentials.set('cred_sam_vp', {
     id: 'cred_sam_vp',

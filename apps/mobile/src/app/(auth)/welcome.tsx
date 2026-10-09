@@ -20,7 +20,7 @@ const holder: Credential['holder'] = {
 const SAMPLES: Credential[] = [
   { id: 'sample_vp', type: 'vehicle_permit', documentNumber: 'VP-21-0045521', issuedOn: '2021-08-02', expiresOn: '2027-08-02', status: 'valid', holder, vehicle: { id: 'v', plate: 'CVPS 123', jurisdiction: 'ON', vin: '1HGCV1F30LA000001', make: 'Honda', model: 'Civic', year: 2021, colour: 'Blue', bodyType: 'SEDAN', plateValidationExpires: '2027-08-02', insurance: { provider: '', policyNumber: '', expiresOn: '' } } },
   { id: 'sample_hc', type: 'health_card', documentNumber: '9876-543-210-XY', issuedOn: '2021-05-14', expiresOn: '2026-11-14', status: 'valid', holder },
-  { id: 'sample_dl', type: 'driver_licence', documentNumber: 'T7654-32109-80514', issuedOn: '2022-05-14', expiresOn: '2027-05-14', status: 'valid', licenceClass: 'G, M', holder },
+  { id: 'sample_dl', type: 'driver_licence', documentNumber: 'T7654-32109-80514', issuedOn: '2022-05-14', expiresOn: '2027-05-14', status: 'valid', licenceClass: 'G, M', conditions: ['X'], discriminator: 'DD7K41093', controlNumber: 'CP0041977', holder },
 ];
 const FAN = [
   { rotate: '-9deg', translateY: 18, translateX: -26 },

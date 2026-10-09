@@ -6,6 +6,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
 import { VehiclePermitDocument } from '../../components/VehiclePermitDocument';
+import { FlipCard } from '../../components/FlipCard';
 import { Button, Card, Divider, ErrorState, Loading, Notice, Row, Screen, SectionHeader, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { QR_REFRESH_SECONDS } from '../../lib/config';
@@ -39,7 +40,13 @@ export default function CredentialScreen() {
 
   return (
     <Screen>
-      {cred.type === 'vehicle_permit' ? <VehiclePermitDocument credential={cred} /> : <DocumentCard credential={cred} />}
+      {cred.type === 'vehicle_permit' ? (
+        <VehiclePermitDocument credential={cred} />
+      ) : cred.type === 'driver_licence' ? (
+        <FlipCard credential={cred} />
+      ) : (
+        <DocumentCard credential={cred} />
+      )}
       {cred.status !== 'valid' && <Notice tone="danger">{t(cred.status)}</Notice>}
 
       {sharing ? (

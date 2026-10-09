@@ -91,11 +91,11 @@ function seed() {
   vehicles.set('veh_sam_car', { id: 'veh_sam_car', ownerPersonId: 'per_sam', plate: 'DEMO 456', jurisdiction: 'ON', vin: '2T1BURHE0KC000003', make: 'Toyota', model: 'Corolla', year: 2019, colour: 'Silver', bodyType: 'SEDAN', plateValidationExpires: day(90), insurance: { provider: 'Sample Insurance Co.', policyNumber: 'SIC-0091', expiresOn: day(60) } });
 
   const creds: Cred[] = [
-    { id: 'cred_alex_dl', personId: 'per_alex', type: 'driver_licence', documentNumber: 'T7654-32109-80514', issuedOn: '2022-05-14', expiresOn: '2027-05-14', status: 'valid', licenceClass: 'G, M', conditions: ['X — corrective lenses'] },
-    { id: 'cred_alex_hc', personId: 'per_alex', type: 'health_card', documentNumber: '9876-543-210-XY', issuedOn: '2021-05-14', expiresOn: '2026-11-14', status: 'valid' },
+    { id: 'cred_alex_dl', personId: 'per_alex', type: 'driver_licence', documentNumber: 'T7654-32109-80514', issuedOn: '2022-05-14', expiresOn: '2027-05-14', status: 'valid', licenceClass: 'G, M', discriminator: 'DD7K41093', controlNumber: 'CP0041977', conditions: ['X — corrective lenses'] },
+    { id: 'cred_alex_hc', personId: 'per_alex', type: 'health_card', documentNumber: '9876-543-210-XY', discriminator: 'HC2209318', issuedOn: '2021-05-14', expiresOn: '2026-11-14', status: 'valid' },
     { id: 'cred_alex_vp_car', personId: 'per_alex', type: 'vehicle_permit', documentNumber: 'VP-21-0045521', issuedOn: '2021-08-02', expiresOn: day(24), status: 'valid', vehicleId: 'veh_alex_car' },
     { id: 'cred_alex_vp_bike', personId: 'per_alex', type: 'vehicle_permit', documentNumber: 'VP-19-0099310', issuedOn: '2019-04-20', expiresOn: day(210), status: 'valid', vehicleId: 'veh_alex_bike' },
-    { id: 'cred_sam_dl', personId: 'per_sam', type: 'driver_licence', documentNumber: 'L4321-09876-50302', issuedOn: '2023-03-02', expiresOn: '2028-03-02', status: 'valid', licenceClass: 'G' },
+    { id: 'cred_sam_dl', personId: 'per_sam', type: 'driver_licence', documentNumber: 'L4321-09876-50302', issuedOn: '2023-03-02', expiresOn: '2028-03-02', status: 'valid', licenceClass: 'G', discriminator: 'DD3Q88214', controlNumber: 'CP0090512' },
     { id: 'cred_sam_vp', personId: 'per_sam', type: 'vehicle_permit', documentNumber: 'VP-19-0071234', issuedOn: '2019-06-11', expiresOn: day(90), status: 'valid', vehicleId: 'veh_sam_car' },
   ];
   for (const c of creds) credentials.set(c.id, c);

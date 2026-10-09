@@ -40,6 +40,10 @@ export interface Credential {
   id: string;
   type: CredentialType;
   documentNumber: string;
+  /** Field 5 "DD/REF": identifies this particular card issuance. */
+  discriminator?: string;
+  /** Card stock control number, printed on the back. */
+  controlNumber?: string;
   issuedOn: string;
   expiresOn: string;
   status: 'valid' | 'suspended' | 'expired' | 'revoked';

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,14 +28,14 @@ const BILINGUAL_TITLE: Record<Credential['type'], [string, string]> = {
  * One field as printed on the card. `n` is the ISO/IEC 18013-1 field number
  * used on North American licences (1 surname, 3 date of birth, 4b expiry…).
  */
-function F({ n, label, value, mono, big, style }: { n: string; label: string; value: string; mono?: boolean; big?: boolean; style?: object }) {
+function F({ n, label, value, mono, big, small, strong, style }: { n: string; label: string; value: string; mono?: boolean; big?: boolean; small?: boolean; strong?: boolean; style?: object }) {
   return (
     <View style={[{ gap: 1, flexShrink: 1 }, style]}>
       <Text style={styles.fieldLabel} numberOfLines={1}>
         <Text style={styles.fieldNo}>{n} </Text>
-        {label}
+        {label.replace(/ \/ /g, '/')}
       </Text>
-      <Text style={[mono ? styles.fieldMono : styles.fieldValue, big && { fontSize: 15 }]} numberOfLines={2}>
+      <Text style={[mono ? styles.fieldMono : styles.fieldValue, big && { fontSize: 15 }, small && { fontSize: 9.5, lineHeight: 11.5 }, strong && { fontFamily: fonts.bold, fontSize: 12 }]} numberOfLines={value.includes('\n') ? 2 : 1}>
         {value}
       </Text>
     </View>
@@ -183,6 +183,38 @@ function Sheen({ width }: { width: number }) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Lays the card out at a fixed 343 × 216 "print size" and scales it to the
+ * width it's shown at, so every field keeps its position at any size.
+ */
+function Canvas({ width, children }: { width: number; children: ReactNode }) {
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width: VB_W,
+        height: VB_H,
+        opacity: width ? 1 : 0,
+        transform: [{ scale: width ? width / VB_W : 1 }],
+        transformOrigin: 'top left',
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+/** Small cursive-style rendering of the holder's signature. */
+function Signature({ holder }: { holder: Credential['holder'] }) {
+  return (
+    <Text style={styles.signature} numberOfLines={1}>
+      {holder.givenNames[0]}. {holder.surname}
+    </Text>
+  );
+}
+
+/**
  * A credential rendered like the physical document.
  * `compact` keeps the full card but puts the key facts in the top strip, so it
  * reads well when cards are stacked and only the top edge is visible.
@@ -194,6 +226,8 @@ export function DocumentCard({ credential, compact, animated = !compact }: { cre
   const isVehicle = credential.type === 'vehicle_permit';
   const valid = credential.status === 'valid';
   const initials = useMemo(() => `${holder.givenNames[0] ?? ''}${holder.surname[0] ?? ''}`.toUpperCase(), [holder]);
+  const isLicence = credential.type === 'driver_licence';
+  const conditionCodes = (credential.conditions ?? []).map((c) => c.split(' ')[0]).join(' ');
   const topRight = isVehicle ? credential.vehicle?.plate : credential.licenceClass ? `${t('class')} ${credential.licenceClass}` : credential.documentNumber.slice(-6);
 
   return (
@@ -206,6 +240,7 @@ export function DocumentCard({ credential, compact, animated = !compact }: { cre
       <SecurityPrint type={credential.type} id={credential.id} />
       {animated && <Sheen width={width} />}
 
+      <Canvas width={width}>
       <View style={styles.inner}>
         {/* Top strip: what you see when cards are stacked */}
         <View style={styles.header}>
@@ -247,28 +282,33 @@ export function DocumentCard({ credential, compact, animated = !compact }: { cre
         ) : (
           <>
             <View style={styles.idBody}>
-              <View style={styles.photo} accessibilityLabel="Photo">
-                <Text style={styles.initials}>{initials}</Text>
-                <View style={styles.photoSeal}>
-                  <HoloSeal id={credential.id} size={24} />
+              <View style={{ width: 66, gap: 4, alignItems: 'center' }}>
+                <View style={styles.photo} accessibilityLabel="Photo">
+                  <Text style={styles.initials}>{initials}</Text>
+                  <View style={styles.photoSeal}>
+                    <HoloSeal id={credential.id} size={22} />
+                  </View>
                 </View>
+                <Signature holder={holder} />
               </View>
-              <View style={{ flex: 1, gap: 5 }}>
-                <F n="4d" label="NUMBER / NO" value={credential.documentNumber} mono big />
-                <F n="1,2" label="NAME / NOM" value={`${holder.surname.toUpperCase()},\n${holder.givenNames.toUpperCase()}`} />
+              <View style={{ flex: 1, gap: 3 }}>
+                <F n="1,2" label="NAME / NOM" value={`${holder.surname.toUpperCase()}\n${holder.givenNames.toUpperCase()}`} />
+                <F n="8" label="ADDRESS / ADRESSE" value={`${holder.address.line1.toUpperCase()}${holder.address.line2 ? `, ${holder.address.line2.toUpperCase()}` : ''}\n${holder.address.city.toUpperCase()}, ${holder.address.province} ${holder.address.postalCode}`} small />
+                <F n="4d" label="NUMBER / NUMÉRO" value={credential.documentNumber} mono big />
                 <View style={styles.fieldRow}>
-                  <F n="3" label="DOB / DDN" value={cardDate(holder.dateOfBirth)} />
                   <F n="15" label="SEX / SEXE" value={holder.sex} />
-                  {credential.type === 'driver_licence' && <F n="16" label="HGT / TAILLE" value={`${holder.heightCm} cm`} />}
+                  {isLicence && <F n="16" label="HGT / HAUT." value={`${holder.heightCm} cm`} />}
+                  {credential.licenceClass ? <F n="9" label="CLASS / CATÉG." value={credential.licenceClass} /> : null}
+                  {isLicence && <F n="12" label="REST / COND." value={conditionCodes || '—'} />}
                 </View>
               </View>
             </View>
             <View style={styles.footer}>
               <View style={styles.fieldRow}>
+                <F n="3" label="DOB / DDN" value={cardDate(holder.dateOfBirth)} strong />
                 <F n="4a" label="ISS / DÉL" value={cardDate(credential.issuedOn)} />
                 <F n="4b" label="EXP" value={cardDate(credential.expiresOn)} />
-                {credential.licenceClass ? <F n="9" label="CLASS / CAT" value={credential.licenceClass} /> : null}
-                {credential.type === 'driver_licence' ? <F n="12" label="REST / COND" value={credential.conditions?.length ? credential.conditions.map((c) => c.split(' ')[0]).join(' ') : '—'} /> : null}
+                {credential.discriminator ? <F n="5" label="DD / REF" value={credential.discriminator} mono /> : null}
               </View>
               {/* Ghost image: a faint second portrait, a common security feature. */}
               <View style={styles.ghost} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -278,6 +318,7 @@ export function DocumentCard({ credential, compact, animated = !compact }: { cre
           </>
         )}
       </View>
+      </Canvas>
 
       {isVehicle && (
         <View style={styles.vehicleSeal} pointerEvents="none">
@@ -294,30 +335,125 @@ export function DocumentCard({ credential, compact, animated = !compact }: { cre
   );
 }
 
+// ---------------------------------------------------------------------------
+// Back of the card
+// ---------------------------------------------------------------------------
+
+/** What each licence class allows, in both official languages. */
+const CLASS_TEXT: Record<string, [string, string]> = {
+  G: ['Cars, vans and small trucks; combinations up to 11,000 kg (towed vehicle max. 4,600 kg)', 'Autos, fourgonnettes et petits camions; ensembles jusqu’à 11 000 kg (véh. remorqué max. 4 600 kg)'],
+  G2: ['As class G, with G2 restrictions', 'Comme la catégorie G, avec restrictions de niveau G2'],
+  G1: ['As class G, with G1 restrictions', 'Comme la catégorie G, avec restrictions de niveau G1'],
+  M: ['Motorcycles, including limited-speed motorcycles and mopeds', 'Motocyclettes, y compris à vitesse limitée et cyclomoteurs'],
+  M2: ['As class M, with M2 restrictions', 'Comme la catégorie M, avec restrictions de niveau M2'],
+  M1: ['As class M, with M1 restrictions', 'Comme la catégorie M, avec restrictions de niveau M1'],
+};
+
+/** Condition codes printed in field 12. */
+const CONDITION_TEXT: Record<string, [string, string]> = {
+  X: ['Corrective lenses must be worn', 'Port de verres correcteurs obligatoire'],
+};
+
+/** The reverse side of an identity card. */
+export function DocumentCardBack({ credential }: { credential: Credential }) {
+  const [width, setWidth] = useState(0);
+  const classes = (credential.licenceClass ?? '').split(/,\s*/).filter(Boolean);
+  const conditions = (credential.conditions ?? []).map((c) => {
+    const code = c.split(' ')[0]!;
+    return [code, CONDITION_TEXT[code] ?? [c, c]] as const;
+  });
+  return (
+    <View
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      style={[styles.card, { aspectRatio: CARD_RATIO, boxShadow: '0px 14px 30px rgba(6, 14, 28, 0.28)' }]}
+      accessible
+      accessibilityLabel={`Back of card. ${classes.map((c) => `Class ${c}: ${CLASS_TEXT[c]?.[0] ?? c}`).join('. ')}`}
+    >
+      <SecurityPrint type={credential.type} id={`${credential.id}_back`} />
+      <Canvas width={width}>
+        <View style={[styles.inner, { paddingBottom: 0 }]}>
+          <View style={styles.backTop}>
+            <Text style={styles.fieldLabel}>
+              <Text style={styles.fieldNo}>9 </Text>CLASS / CATÉGORIE
+            </Text>
+            {credential.controlNumber ? (
+              <View style={styles.controlBox}>
+                <Text style={styles.controlText}>{credential.controlNumber}</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={{ gap: 5, marginTop: 4, flex: 1 }}>
+            {classes.map((c) => (
+              <View key={c} style={styles.backLine}>
+                <Text style={styles.backCode}>{c}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.backEn}>{CLASS_TEXT[c]?.[0] ?? `Class ${c}`}</Text>
+                  <Text style={styles.backFr}>{CLASS_TEXT[c]?.[1] ?? `Catégorie ${c}`}</Text>
+                </View>
+              </View>
+            ))}
+            {conditions.length > 0 && (
+              <>
+                <Text style={[styles.fieldLabel, { marginTop: 3 }]}>
+                  <Text style={styles.fieldNo}>12 </Text>RESTRICTIONS / CONDITIONS
+                </Text>
+                {conditions.map(([code, [en, fr]]) => (
+                  <View key={code} style={styles.backLine}>
+                    <Text style={styles.backCode}>{code}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.backEn}>{en}</Text>
+                      <Text style={styles.backFr}>{fr}</Text>
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
+          </View>
+        </View>
+        {/* Where a plastic card carries a barcode, the digital card is checked with its live, signed QR code instead. */}
+        <View style={styles.verifyBand}>
+          <Ionicons name="qr-code" size={22} color="#16325C" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.verifyEn}>Verify with the live QR code in the app. No barcode.</Text>
+            <Text style={styles.verifyFr}>Vérifiez avec le code QR en direct dans l’appli. Aucun code à barres.</Text>
+          </View>
+          {credential.discriminator ? <Text style={styles.verifyDd}>{credential.discriminator}</Text> : null}
+        </View>
+      </Canvas>
+      {IS_PROTOTYPE && (
+        <View pointerEvents="none" style={styles.watermarkWrap}>
+          <Text style={styles.watermark}>SPECIMEN · PROTOTYPE</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: { width: '100%', borderRadius: radius.lg, overflow: 'hidden', backgroundColor: '#0E2442' },
-  inner: { flex: 1, padding: 18, justifyContent: 'space-between' },
+  inner: { flex: 1, padding: 13, justifyContent: 'space-between' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   docType: { color: '#FFFFFF', fontFamily: fonts.bold, letterSpacing: 1.6, fontSize: 11.5 },
   docTypeFr: { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.semibold, letterSpacing: 1.2, fontSize: 8.5, marginTop: 1 },
-  idBody: { flexDirection: 'row', gap: 14, alignItems: 'flex-start', flex: 1, marginTop: 10 },
-  fieldRow: { flexDirection: 'row', gap: 12, flexShrink: 1 },
-  fieldLabel: { color: 'rgba(255,255,255,0.62)', fontFamily: fonts.semibold, fontSize: 7.5, letterSpacing: 0.8 },
+  idBody: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', flex: 1, marginTop: 5 },
+  fieldRow: { flexDirection: 'row', gap: 9, flexShrink: 1 },
+  fieldLabel: { color: 'rgba(255,255,255,0.62)', fontFamily: fonts.semibold, fontSize: 7, letterSpacing: 0.4 },
   fieldNo: { color: 'rgba(255,255,255,0.9)', fontFamily: fonts.bold },
-  fieldValue: { color: '#FFFFFF', fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15 },
+  fieldValue: { color: '#FFFFFF', fontFamily: fonts.semibold, fontSize: 11.5, lineHeight: 12.5 },
   fieldMono: { color: '#FFFFFF', fontFamily: fonts.mono, fontSize: 12, letterSpacing: 0.6 },
-  ghost: { width: 24, height: 30, borderRadius: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', opacity: 0.55 },
-  ghostText: { color: 'rgba(255,255,255,0.8)', fontFamily: fonts.bold, fontSize: 10 },
+  ghost: { width: 20, height: 25, borderRadius: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center', opacity: 0.6 },
+  signature: { color: 'rgba(255,255,255,0.88)', fontFamily: fonts.medium, fontStyle: 'italic', fontSize: 10, transform: [{ rotate: '-4deg' }] },
+  ghostText: { color: 'rgba(255,255,255,0.8)', fontFamily: fonts.bold, fontSize: 8.5 },
   topRight: { color: 'rgba(255,255,255,0.9)', fontFamily: fonts.mono, fontSize: 12.5, letterSpacing: 0.5 },
   status: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { color: '#FFFFFF', fontSize: 11.5, fontFamily: fonts.semibold },
   bodyRow: { flexDirection: 'row', gap: 16, alignItems: 'center' },
   photo: {
-    width: 62,
-    height: 78,
+    width: 64,
+    height: 80,
     borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.14)',
     borderWidth: 1,
@@ -345,6 +481,17 @@ const styles = StyleSheet.create({
   number: { color: '#FFFFFF', fontFamily: fonts.mono, fontSize: 14, letterSpacing: 1 },
   expiry: { color: '#FFFFFF', fontFamily: fonts.semibold, fontSize: 14 },
   vehicleSeal: { position: 'absolute', right: 18, top: '42%' },
+  backTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  controlBox: { backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
+  controlText: { color: '#0D1522', fontFamily: fonts.monoBold, fontSize: 12, letterSpacing: 2 },
+  backLine: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  backCode: { color: '#FFFFFF', fontFamily: fonts.extrabold, fontSize: 13, width: 22 },
+  backEn: { color: '#FFFFFF', fontFamily: fonts.semibold, fontSize: 9.5, lineHeight: 12 },
+  backFr: { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.medium, fontSize: 8.5, lineHeight: 11 },
+  verifyBand: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 46, backgroundColor: '#F7F8FA', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15 },
+  verifyEn: { color: '#16325C', fontFamily: fonts.semibold, fontSize: 9, lineHeight: 11.5 },
+  verifyFr: { color: '#5F6B7D', fontFamily: fonts.medium, fontSize: 8, lineHeight: 10.5 },
+  verifyDd: { color: '#16325C', fontFamily: fonts.mono, fontSize: 9 },
   watermarkWrap: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   watermark: { color: 'rgba(255, 140, 128, 0.55)', fontFamily: fonts.extrabold, fontSize: 20, letterSpacing: 4, transform: [{ rotate: '-16deg' }] },
 });
