@@ -1,4 +1,21 @@
 // Mirrors apps/api/src/types.ts response shapes.
+import type { Consent, DashboardAction, Preferences, ServiceDefinition, ServiceRequest } from './shared/platform';
+
+export type {
+  Appointment,
+  Consent,
+  DashboardAction,
+  Faq,
+  Location,
+  Organization,
+  PlateCheck,
+  Preferences,
+  RequestResultLine,
+  SavedCard,
+  ServiceDefinition,
+  ServiceRequest,
+  Slot,
+} from './shared/platform';
 
 export interface Address {
   line1: string;
@@ -88,6 +105,8 @@ export interface Payment {
   id: string;
   purpose: 'fine' | 'plate_renewal' | 'service_fee';
   referenceId: string;
+  label?: string;
+  cardLast4?: string;
   amount: number;
   currency: 'CAD';
   method: PaymentMethod;
@@ -113,26 +132,12 @@ export interface Localized {
   fr: string;
 }
 
-export interface ServiceDefinition {
-  id: string;
-  category: 'driver' | 'vehicle' | 'identity' | 'health' | 'records';
-  name: Localized;
-  description: Localized;
-  fee: number;
-  online: boolean;
-  fields: { key: string; label: Localized; type: 'text' | 'date' | 'select'; options?: string[]; required: boolean }[];
-}
-
-export interface ServiceRequest {
-  id: string;
-  serviceId: string;
-  status: 'submitted' | 'in_review' | 'completed' | 'rejected';
-  reference: string;
-  createdAt: string;
-}
+export type RequestDetail = ServiceRequest & { payment?: Payment };
+export type ConsentView = Consent & { expired: boolean };
+export type { ServiceDefinition as Service };
 
 export interface Me {
-  account: { id: string; email: string; phone?: string; language: 'en' | 'fr'; identityAssurance: string; createdAt: string };
+  account: { id: string; email: string; phone?: string; language: 'en' | 'fr'; identityAssurance: string; createdAt: string; pinSet: boolean };
   person: Person;
   summary: {
     openFines: number;
@@ -140,7 +145,9 @@ export interface Me {
     overdueFines: number;
     unreadMessages: number;
     renewalsDue: { kind: string; id: string; label: string; expiresOn: string }[];
+    actions: DashboardAction[];
   };
+  preferences: Preferences;
 }
 
 export interface AccessLogEntry {
@@ -167,5 +174,6 @@ export interface SignatureRecord {
   documentTitle: string;
   documentSha256: string;
   signedAt: string;
+  retainedUntil?: string;
   signature: string;
 }

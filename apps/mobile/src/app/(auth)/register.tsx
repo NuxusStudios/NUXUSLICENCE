@@ -1,21 +1,25 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Field, IconTile, Notice, PressScale, Screen, Txt, type IconName } from '../../components/ui';
+import { PasswordRules, Steps } from '../../components/kit';
+import { Button, Card, Field, IconTile, Notice, PressScale, Screen, Txt, type IconName } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { DEMO_MODE } from '../../lib/config';
 import { useI18n } from '../../lib/i18n';
+import { passwordOk, pinProblem } from '../../lib/shared/platform';
 import { radius, space, useTheme } from '../../lib/theme';
 
 /**
- * Three-step onboarding that replaces Sanad's in-person activation:
+ * Four-step onboarding that replaces Sanad's in-person activation:
  * 1. match licence number + DOB against the registry
  * 2. document scan + liveness selfie through an identity-verification SDK
- * 3. account credentials
+ * 3. confirm the mobile number with a one-time code
+ * 4. account credentials and the digital ID PIN
  */
 export default function Register() {
   const { completeRegistration } = useAuth();
-  const { t, lang } = useI18n();
+  const { t, tr, lang } = useI18n();
   const c = useTheme();
   const [step, setStep] = useState(1);
   const [licenceNumber, setLicence] = useState('');
@@ -25,6 +29,9 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [otp, setOtp] = useState<{ otpId: string; devCode?: string }>();
+  const [code, setCode] = useState('');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
 
@@ -37,12 +44,14 @@ export default function Register() {
       // The IDV vendor SDK returns a session id after document + liveness checks;
       // the API confirms the result server-to-server before creating the account.
       const idvSessionId = `idv_demo_${Date.now()}`;
-      const { accessToken } = await api.register({ email, password, phone: phone || undefined, licenceNumber, dateOfBirth, idvSessionId, language: lang });
+      const { accessToken } = await api.register({ email, password, phone, licenceNumber, dateOfBirth, idvSessionId, language: lang, pin, otpId: otp?.otpId, otpCode: code });
       await completeRegistration(accessToken);
     } catch (e) {
       setError((e as Error).message);
       // Identity mismatch → send them back to fix the details.
-      if ((e as { code?: string }).code === 'identity_not_matched') setStep(1);
+      const errCode = (e as { code?: string }).code;
+      if (errCode === 'identity_not_matched') setStep(1);
+      if (errCode?.startsWith('otp_')) setStep(3);
     } finally {
       setBusy(false);
     }
@@ -50,9 +59,6 @@ export default function Register() {
 
   const header = (title: string, body: string) => (
     <View style={{ gap: space.sm }}>
-      <Txt v="label" color={c.accent}>
-        {t('stepOf').replace('{n}', String(step))}
-      </Txt>
       <Txt v="title" accessibilityRole="header">
         {title}
       </Txt>
@@ -96,11 +102,7 @@ export default function Register() {
 
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', gap: 6 }} accessibilityLabel={t('stepOf').replace('{n}', String(step))}>
-        {[1, 2, 3].map((n) => (
-          <View key={n} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: n <= step ? c.accent : c.border }} />
-        ))}
-      </View>
+      <Steps steps={[t('regStep1'), t('regStep2'), tr('Your mobile number', 'Votre cellulaire'), t('regStep3')]} current={step - 1} />
       {error && <Notice tone="danger">{error}</Notice>}
 
       {step === 1 && (
@@ -127,12 +129,63 @@ export default function Register() {
 
       {step === 3 && (
         <>
+          {header(tr('Your mobile number', 'Votre cellulaire'), tr('We text a code to confirm the number. It’s used to recover your account.', 'Nous envoyons un code par texto pour confirmer le numéro. Il sert à récupérer votre compte.'))}
+          <Field label={tr('Mobile number', 'Cellulaire')} value={phone} onChangeText={(v) => { setPhone(v); setOtp(undefined); }} keyboardType="phone-pad" autoComplete="tel" placeholder="+1 416 555 0100" />
+          {!otp ? (
+            <Button
+              title={tr('Send code', 'Envoyer le code')}
+              icon="chatbubble-ellipses-outline"
+              loading={busy}
+              disabled={phone.replace(/\D/g, '').length < 10}
+              onPress={async () => {
+                setBusy(true);
+                setError(undefined);
+                try {
+                  setOtp(await api.sendOtp(phone));
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          ) : (
+            <>
+              <Field label={tr('6-digit code', 'Code à 6 chiffres')} value={code} onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" autoComplete="sms-otp" textContentType="oneTimeCode" />
+              {(DEMO_MODE || otp.devCode) && (
+                <Txt v="caption" faint>
+                  {tr(`No SMS in this prototype. Your code: ${otp.devCode}`, `Pas de texto dans ce prototype. Votre code : ${otp.devCode}`)}
+                </Txt>
+              )}
+              <Button title={t('continue')} onPress={() => setStep(4)} disabled={code.length !== 6} />
+              <Button title={tr('Resend code', 'Renvoyer le code')} variant="ghost" size="md" onPress={() => { setOtp(undefined); setCode(''); }} />
+            </>
+          )}
+          <Button title={t('back')} variant="ghost" size="md" onPress={() => setStep(2)} />
+        </>
+      )}
+
+      {step === 4 && (
+        <>
           {header(t('regStep3'), t('regStep3Body'))}
           <Field label={t('email')} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
-          <Field label={t('phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoComplete="tel" />
           <Field label={t('password')} value={password} onChangeText={setPassword} secureTextEntry autoComplete="new-password" textContentType="newPassword" />
-          <Button title={t('createAccount')} onPress={submit} loading={busy} disabled={!email.includes('@') || password.length < 8} />
-          <Button title={t('back')} variant="ghost" size="md" onPress={() => setStep(2)} />
+          <Card style={{ gap: space.sm }}>
+            <PasswordRules password={password} />
+          </Card>
+          <Field
+            label={tr('Digital ID PIN (4 digits)', 'NIP d’identité numérique (4 chiffres)')}
+            value={pin}
+            onChangeText={(v) => setPin(v.replace(/\D/g, '').slice(0, 4))}
+            secureTextEntry
+            keyboardType="number-pad"
+            error={pin.length === 4 && pinProblem(pin) ? tr('Choose a PIN that is harder to guess.', 'Choisissez un NIP plus difficile à deviner.') : undefined}
+          />
+          <Txt v="caption" muted>
+            {tr('You’ll use the PIN to sign documents and approve data requests.', 'Le NIP sert à signer des documents et à approuver des demandes de données.')}
+          </Txt>
+          <Button title={t('createAccount')} onPress={submit} loading={busy} disabled={!email.includes('@') || !passwordOk(password) || !!pinProblem(pin)} />
+          <Button title={t('back')} variant="ghost" size="md" onPress={() => setStep(3)} />
         </>
       )}
     </Screen>

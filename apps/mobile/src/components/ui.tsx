@@ -237,6 +237,7 @@ export function Button({
     <PressScale
       onPress={onPress}
       disabled={inactive}
+      accessibilityLabel={title}
       accessibilityState={{ disabled: !!inactive, busy: !!loading }}
       style={[
         styles.button,

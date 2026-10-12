@@ -6,7 +6,7 @@ import { useI18n } from '../../lib/i18n';
 import { fonts, useTheme } from '../../lib/theme';
 
 export default function TabsLayout() {
-  const { t } = useI18n();
+  const { t, tr } = useI18n();
   const c = useTheme();
   // Filled icon when selected, outline otherwise.
   const icon = (name: IconName) =>
@@ -26,7 +26,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: t('tabHome'), tabBarIcon: icon('home') }} />
       <Tabs.Screen name="wallet" options={{ title: t('tabWallet'), tabBarIcon: icon('wallet') }} />
-      <Tabs.Screen name="vehicles" options={{ title: t('tabVehicles'), tabBarIcon: icon('car-sport') }} />
+      <Tabs.Screen name="services" options={{ title: tr('Services', 'Services'), tabBarIcon: icon('grid') }} />
       <Tabs.Screen name="fines" options={{ title: t('tabFines'), tabBarIcon: icon('receipt') }} />
       <Tabs.Screen name="account" options={{ title: t('tabAccount'), tabBarIcon: icon('person-circle') }} />
     </Tabs>

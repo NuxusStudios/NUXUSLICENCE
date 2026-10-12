@@ -48,7 +48,7 @@ const en = {
 
   // tabs
   tabHome: 'Home',
-  tabWallet: 'Wallet',
+  tabWallet: 'Documents',
   tabVehicles: 'Vehicles',
   tabFines: 'Tickets',
   tabAccount: 'Account',
@@ -280,7 +280,7 @@ const fr: Partial<Record<TKey, string>> = {
   unlockTitle: 'Portefeuille verrouillé',
   unlock: 'Déverrouiller',
   tabHome: 'Accueil',
-  tabWallet: 'Portefeuille',
+  tabWallet: 'Documents',
   tabVehicles: 'Véhicules',
   tabFines: 'Contraventions',
   tabAccount: 'Compte',
@@ -458,6 +458,8 @@ interface I18n {
   t: (key: TKey) => string;
   /** Pick the right side of a { en, fr } pair from the API. */
   pick: (v: { en: string; fr: string }) => string;
+  /** Inline bilingual string for screen-specific copy: tr('Save', 'Enregistrer'). */
+  tr: (en: string, fr: string) => string;
 }
 
 const Ctx = createContext<I18n | null>(null);
@@ -489,7 +491,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback((key: TKey) => (lang === 'fr' ? fr[key] ?? en[key] : en[key]), [lang]);
   const pick = useCallback((v: { en: string; fr: string }) => v[lang], [lang]);
-  const value = useMemo(() => ({ lang, setLang, t, pick }), [lang, setLang, t, pick]);
+  const tr = useCallback((enText: string, frText: string) => (lang === 'fr' ? frText : enText), [lang]);
+  const value = useMemo(() => ({ lang, setLang, t, pick, tr }), [lang, setLang, t, pick, tr]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

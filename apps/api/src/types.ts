@@ -123,6 +123,10 @@ export interface Account {
   createdAt: string;
   identityAssurance: 'IAL2';
   pushTokens: string[];
+  /** Digital ID PIN (scrypt), confirms signing and data sharing. */
+  pinHash?: string;
+  /** Saved handwritten signature as an SVG path. */
+  savedSignature?: string;
 }
 
 export interface InboxMessage {
@@ -141,6 +145,9 @@ export interface Payment {
   accountId: string;
   purpose: 'fine' | 'plate_renewal' | 'service_fee';
   referenceId: string;
+  /** What was paid for, for the payment history. */
+  label?: string;
+  cardLast4?: string;
   amount: number;
   currency: 'CAD';
   method: 'card' | 'apple_pay' | 'google_pay' | 'interac';
@@ -149,34 +156,7 @@ export interface Payment {
   createdAt: string;
 }
 
-export interface ServiceDefinition {
-  id: string;
-  category: 'driver' | 'vehicle' | 'identity' | 'health' | 'records';
-  name: { en: string; fr: string };
-  description: { en: string; fr: string };
-  fee: number;
-  online: boolean;
-  fields: ServiceField[];
-}
-
-export interface ServiceField {
-  key: string;
-  label: { en: string; fr: string };
-  type: 'text' | 'date' | 'select';
-  options?: string[];
-  required: boolean;
-}
-
-export interface ServiceRequest {
-  id: string;
-  accountId: string;
-  serviceId: string;
-  data: Record<string, string>;
-  status: 'submitted' | 'in_review' | 'completed' | 'rejected';
-  reference: string;
-  createdAt: string;
-  paymentId?: string;
-}
+export type { ServiceDefinition, ServiceField, ServiceRequest, Appointment, Consent, Feedback, Otp, Preferences, SavedCard } from './shared/platform.js';
 
 export interface SignatureRecord {
   id: string;
@@ -184,6 +164,8 @@ export interface SignatureRecord {
   documentTitle: string;
   documentSha256: string;
   signedAt: string;
+  /** The signed copy is deleted from the server after this; the hash and signature stay. */
+  retainedUntil?: string;
   /** Detached JWS over the document hash, signed by the platform on the citizen's behalf after step-up auth. */
   signature: string;
 }

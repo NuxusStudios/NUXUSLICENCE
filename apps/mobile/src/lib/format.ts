@@ -37,3 +37,5 @@ export function daysUntil(iso: string): number {
 export function cardDate(iso: string): string {
   return iso.slice(0, 10).replace(/-/g, '/');
 }
+
+export const METHOD = { card: 'Card', apple_pay: 'Apple Pay', google_pay: 'Google Pay', interac: 'Interac' } as const;

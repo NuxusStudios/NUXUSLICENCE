@@ -1,17 +1,18 @@
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Plate } from '../../components/Plate';
-import { Badge, Card, Empty, ErrorState, Loading, Screen, Txt } from '../../components/ui';
-import { api } from '../../lib/api';
-import { date, daysUntil } from '../../lib/format';
-import { useI18n } from '../../lib/i18n';
-import { radius, space, useTheme } from '../../lib/theme';
-import { useAsync } from '../../lib/useAsync';
+import { Plate } from '../components/Plate';
+import { SuggestCard } from '../components/kit';
+import { Badge, Card, Empty, ErrorState, Loading, Screen, Txt } from '../components/ui';
+import { api } from '../lib/api';
+import { date, daysUntil } from '../lib/format';
+import { useI18n } from '../lib/i18n';
+import { radius, space, useTheme } from '../lib/theme';
+import { useAsync } from '../lib/useAsync';
 
 export default function Vehicles() {
   const c = useTheme();
-  const { t, lang } = useI18n();
+  const { t, lang, tr } = useI18n();
   const { data, error, loading, reload } = useAsync(api.vehicles);
   if (!data && loading) return <Loading />;
   if (!data && error) return <ErrorState error={error} onRetry={reload} />;
@@ -52,6 +53,13 @@ export default function Vehicles() {
           </Card>
         );
       })}
+      <SuggestCard
+        icon="sparkles"
+        title={tr('Personalized plates', 'Plaques personnalisées')}
+        body={tr('Check if your combination is free and order it in the app.', 'Vérifiez si votre combinaison est libre et commandez-la dans l’application.')}
+        cta={tr('Search combinations', 'Rechercher une combinaison')}
+        onPress={() => router.push('/plates')}
+      />
     </Screen>
   );
 }

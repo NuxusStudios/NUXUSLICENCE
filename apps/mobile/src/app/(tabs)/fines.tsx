@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { FineRow } from '../../components/FineRow';
+import { Chip, ChipRow } from '../../components/kit';
 import { Body, Button, Card, Divider, Empty, ErrorState, IconTile, Loading, Notice, Screen, Segmented, SectionHeader, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { DEMO_MODE } from '../../lib/config';
@@ -12,14 +13,16 @@ import { useAsync } from '../../lib/useAsync';
 
 export default function Fines() {
   const c = useTheme();
-  const { t, lang } = useI18n();
+  const { t, lang, tr } = useI18n();
   const [filter, setFilter] = useState<'open' | 'all'>('open');
+  const [plate, setPlate] = useState<string>('all');
   const { data, error, loading, reload } = useAsync(api.fines);
   if (!data && loading) return <Loading />;
   if (!data && error) return <ErrorState error={error} onRetry={reload} />;
 
   const open = data!.filter((f) => f.status === 'outstanding' || f.status === 'overdue');
-  const shown = filter === 'open' ? open : data!;
+  const plates = [...new Set(data!.map((f) => f.plate ?? 'driver'))];
+  const shown = (filter === 'open' ? open : data!).filter((f) => plate === 'all' || (f.plate ?? 'driver') === plate);
   const overdue = open.some((f) => f.status === 'overdue');
   const due = open.reduce((s, f) => s + f.total, 0);
 
@@ -33,7 +36,22 @@ export default function Fines() {
           { value: 'all', label: `${t('filterAll')} (${data!.length})` },
         ]}
       />
+      {plates.length > 1 && (
+        <ChipRow>
+          <Chip label={tr('All', 'Toutes')} on={plate === 'all'} onPress={() => setPlate('all')} />
+          {plates.map((p) => (
+            <Chip key={p} label={p === 'driver' ? tr('Issued to me', 'À mon nom') : p} icon={p === 'driver' ? 'person' : 'car'} on={plate === p} onPress={() => setPlate(p)} />
+          ))}
+        </ChipRow>
+      )}
       {overdue && <Notice tone="danger">{t('blockedRenewal')}</Notice>}
+      {open.length > 1 && (
+        <Button
+          title={`${tr('Pay all', 'Tout payer')} · ${money(due, lang)}`}
+          icon="flash"
+          onPress={() => router.push({ pathname: '/pay', params: { kind: 'all-fines', id: 'all', amount: String(due), label: tr(`${open.length} tickets`, `${open.length} contraventions`) } })}
+        />
+      )}
       <Card style={{ paddingVertical: space.xs }}>
         {shown.length ? (
           shown.map((f, i) => (

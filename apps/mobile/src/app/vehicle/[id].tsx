@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { FineRow } from '../../components/FineRow';
+import { Check } from '../../components/kit';
 import { Badge, Button, Card, Divider, Empty, ErrorState, Loading, Notice, Row, Screen, Segmented, SectionHeader, Txt } from '../../components/ui';
 import { Plate } from '../../components/Plate';
 import { api, ApiError } from '../../lib/api';
@@ -12,7 +13,8 @@ import { useAsync } from '../../lib/useAsync';
 
 export default function VehicleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t, lang } = useI18n();
+  const { t, tr, lang } = useI18n();
+  const [declared, setDeclared] = useState(false);
   const navigation = useNavigation();
   const { data, error, loading, reload } = useAsync(() => api.vehicle(id), id);
   const [years, setYears] = useState<1 | 2>(1);
@@ -87,8 +89,14 @@ export default function VehicleScreen() {
           ]}
         />
         <Notice tone="info">{t('renewalFree')}</Notice>
+        <Check checked={declared} onToggle={() => setDeclared((d) => !d)}>
+          {tr(
+            `I declare the vehicle is insured (${v.insurance.provider}) and I authorize ServiceOntario to check my records for this renewal.`,
+            `Je déclare que le véhicule est assuré (${v.insurance.provider}) et j’autorise ServiceOntario à vérifier mes dossiers pour ce renouvellement.`,
+          )}
+        </Check>
         {result && <Notice tone={result.tone}>{result.text}</Notice>}
-        <Button title={t('renewPlate')} icon="refresh-circle" onPress={renew} loading={busy} />
+        <Button title={t('renewPlate')} icon="refresh-circle" onPress={renew} loading={busy} disabled={!declared} />
       </Card>
 
       <SectionHeader>{t('ticketsOnVehicle')}</SectionHeader>

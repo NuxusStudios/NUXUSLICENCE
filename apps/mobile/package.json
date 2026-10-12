@@ -44,7 +44,7 @@
     "typecheck": "tsc --noEmit",
     "export:web": "expo export --platform web",
     "lint": "expo lint",
-    "build:demo-page": "EXPO_PUBLIC_DEMO_MODE=true expo export --platform web --output-dir dist-demo && node scripts/build-demo-page.mjs"
+    "build:demo-page": "EXPO_PUBLIC_DEMO_MODE=true expo export --platform web --output-dir dist-demo --clear && node scripts/build-demo-page.mjs"
   },
   "private": true
 }

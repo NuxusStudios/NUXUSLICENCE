@@ -10,6 +10,8 @@ export interface ChargeRequest {
   method: Payment['method'];
   /** Token from the client-side wallet / card sheet (Stripe, Moneris, Apple Pay, Google Pay...). */
   paymentToken: string;
+  label?: string;
+  cardLast4?: string;
 }
 
 /**
@@ -45,6 +47,8 @@ export async function charge(store: Store, req: ChargeRequest): Promise<Payment>
     status: result.approved ? 'succeeded' : 'failed',
     receiptNumber: referenceNumber('RCPT'),
     createdAt: new Date().toISOString(),
+    ...(req.label ? { label: req.label } : {}),
+    ...(req.cardLast4 ? { cardLast4: req.cardLast4 } : {}),
   };
   store.payments.set(payment.id, payment);
   return payment;

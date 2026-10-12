@@ -1,4 +1,5 @@
-import { hashPassword, newId } from './crypto.js';
+import { hashPassword, newId, referenceNumber } from './crypto.js';
+import { defaultPreferences, sampleAppointment, sampleConsents, sampleRequests } from './shared/platform.js';
 import { addDays, fineTotals } from './fines.js';
 import type { Store } from './store.js';
 import type { Account, Fine } from './types.js';
@@ -6,6 +7,8 @@ import type { Account, Fine } from './types.js';
 // All people, numbers and plates below are fictional demo data.
 export const DEMO_EMAIL = 'demo@civicpass.example';
 export const DEMO_PASSWORD = 'Demo1234!';
+/** Digital ID PIN for the demo account. */
+export const DEMO_PIN = '2580';
 
 export const DEMO_PEOPLE = {
   alex: { licenceNumber: 'T7654-32109-80514', dateOfBirth: '1990-05-14' },
@@ -111,12 +114,21 @@ export async function seed(store: Store): Promise<void> {
     email: DEMO_EMAIL,
     phone: '+1 416 555 0100',
     passwordHash: await hashPassword(DEMO_PASSWORD),
+    pinHash: await hashPassword(DEMO_PIN),
     language: 'en',
     createdAt: iso(-200),
     identityAssurance: 'IAL2',
     pushTokens: [],
   };
   store.accounts.set(account.id, account);
+
+  // Sanad-style extras: requests in each state, data requests, a visit, a saved card.
+  for (const r of sampleRequests(account.id, now, newId, referenceNumber)) store.serviceRequests.set(r.id, r);
+  for (const c of sampleConsents(account.id, now, newId)) store.consents.set(c.id, c);
+  const apt = sampleAppointment(account.id, now, newId, referenceNumber);
+  store.appointments.set(apt.id, apt);
+  store.cards.set('card_alex_visa', { id: 'card_alex_visa', accountId: account.id, brand: 'visa', last4: '4242', expiry: '08/29', addedAt: iso(-200) });
+  store.preferences.set(account.id, { ...defaultPreferences(), favouriteCards: ['cred_alex_dl', 'cred_alex_vp_car', 'cred_alex_hc'] });
 
   const fines: Fine[] = [
     {
@@ -213,7 +225,10 @@ export async function seed(store: Store): Promise<void> {
     status: 'succeeded',
     receiptNumber: 'RCPT-DEMO-0001',
     createdAt: '2025-10-11T16:30:00.000Z',
+    label: 'Ticket JPC-ASE-2025-104552',
   });
+  store.payments.set('pay_hist_2', { id: 'pay_hist_2', accountId: account.id, purpose: 'service_fee', referenceId: 'driver-record', amount: 12, currency: 'CAD', method: 'card', status: 'succeeded', receiptNumber: 'RCPT-DEMO-0002', createdAt: iso(-12), label: 'Driver record (abstract)', cardLast4: '4242' });
+  store.payments.set('pay_hist_3', { id: 'pay_hist_3', accountId: account.id, purpose: 'service_fee', referenceId: 'birth-certificate', amount: 25, currency: 'CAD', method: 'interac', status: 'succeeded', receiptNumber: 'RCPT-DEMO-0003', createdAt: iso(-1), label: 'Birth certificate' });
 
   const msgs = [
     { category: 'fine' as const, title: 'New red light camera ticket', body: `Plate ${DEMO_PLATES.alexCar} was recorded at Example Ave & Sample St. Total payable: $390.00.`, link: '/fine/fine_rlc_1', createdAt: iso(-3), read: false },

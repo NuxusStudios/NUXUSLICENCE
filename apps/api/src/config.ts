@@ -27,4 +27,6 @@ export const config = {
   fineResponseDays: Number(env('FINE_RESPONSE_DAYS', '15')),
   seedDemoData: env('SEED_DEMO_DATA', isProduction ? 'false' : 'true') === 'true',
   homeJurisdiction: env('HOME_JURISDICTION', 'ON'),
+  /** One-time codes are returned in API responses outside production (no SMS gateway in dev). */
+  exposeDevCodes: !isProduction,
 };

@@ -2,15 +2,18 @@ import { useState } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Button, Card, Divider, Field, IconTile, Notice, Row, Screen, Txt } from '../components/ui';
+import { Check, ResultPanel } from '../components/kit';
+import { Button, Card, Divider, Field, ListItem, Notice, Row, Screen, Txt } from '../components/ui';
 import { api, type PaymentInput } from '../lib/api';
-import { money } from '../lib/format';
+import { METHOD, dateTime, money } from '../lib/format';
 import { useI18n } from '../lib/i18n';
+import { cardBrand } from '../lib/shared/platform';
 import { fonts, space, useTheme } from '../lib/theme';
 import type { Payment, PaymentMethod } from '../lib/types';
+import { useAsync } from '../lib/useAsync';
 
 type Params = {
-  kind: 'fine' | 'plate' | 'service';
+  kind: 'fine' | 'plate' | 'service' | 'request' | 'all-fines';
   id: string;
   amount?: string;
   label?: string;
@@ -37,23 +40,30 @@ function formatCard(input: string): string {
 export default function Pay() {
   const params = useLocalSearchParams<Params>();
   const c = useTheme();
-  const { t, lang } = useI18n();
+  const { t, tr, lang } = useI18n();
+  const cards = useAsync(api.cards);
   const [card, setCard] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [savedId, setSavedId] = useState<string>();
+  const [saveCard, setSaveCard] = useState(false);
   const [busy, setBusy] = useState<PaymentMethod>();
   const [error, setError] = useState<string>();
-  const [receipt, setReceipt] = useState<Payment | { receiptNumber: string; amount: number }>();
+  const [receipt, setReceipt] = useState<Partial<Payment> & { receiptNumber: string; amount: number }>();
   const amount = Number(params.amount ?? 0);
 
   async function pay(method: PaymentMethod) {
     setBusy(method);
     setError(undefined);
-    const paymentToken = method === 'card' && card.replace(/\s/g, '') === '4000000000000002' ? 'tok_decline' : `tok_demo_${method}_${Date.now()}`;
+    const digits = card.replace(/\s/g, '');
+    const paymentToken = method === 'card' && !savedId && digits === '4000000000000002' ? 'tok_decline' : `tok_demo_${method}_${Date.now()}`;
     const input: PaymentInput = { method, paymentToken };
+    if (method === 'card' && savedId) input.cardId = savedId;
+    if (method === 'card' && !savedId && saveCard) input.saveCard = { last4: digits.slice(-4), expiry: expiry || '12/30', brand: cardBrand(digits) };
     try {
-      if (params.kind === 'fine') {
-        const res = await api.payFine(params.id, input);
-        setReceipt(res.payment);
-      } else if (params.kind === 'plate') {
+      if (params.kind === 'fine') setReceipt((await api.payFine(params.id, input)).payment);
+      else if (params.kind === 'all-fines') setReceipt((await api.payAllFines(input)).payment);
+      else if (params.kind === 'request') setReceipt((await api.payRequest(params.id, input)).payment);
+      else if (params.kind === 'plate') {
         const res = await api.renewPlate(params.id, { years: params.years === '2' ? 2 : 1, ...input });
         setReceipt({ receiptNumber: res.paymentId ?? '—', amount: res.fee });
       } else {
@@ -72,16 +82,19 @@ export default function Pay() {
   if (receipt) {
     return (
       <Screen>
-        <View style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xl }}>
-          <IconTile icon="checkmark" tone="success" size={84} />
-          <Txt v="title">{t('paymentSuccess')}</Txt>
+        <ResultPanel title={t('paymentSuccess')} subtitle={tr('A receipt is in your payment history and you’ll get a notification.', 'Le reçu est dans l’historique des paiements et vous recevrez une notification.')}>
           <Text style={{ fontFamily: fonts.extrabold, fontSize: 40, letterSpacing: -1.2, color: c.text, fontVariant: ['tabular-nums'] }}>{money(receipt.amount, lang)}</Text>
-        </View>
+        </ResultPanel>
         <Card style={{ paddingVertical: space.md }}>
           <Row label={t('receipt')} value={receipt.receiptNumber} mono />
-          {params.label ? <Row label="" value={params.label} /> : null}
+          {receipt.id ? <Row label={tr('Payment number', 'Numéro de paiement')} value={receipt.id} mono /> : null}
+          {receipt.method ? <Row label={tr('Method', 'Mode')} value={`${METHOD[receipt.method]}${receipt.cardLast4 ? ` •••• ${receipt.cardLast4}` : ''}`} /> : null}
+          {receipt.createdAt ? <Row label={tr('Date', 'Date')} value={dateTime(receipt.createdAt, lang)} /> : null}
+          {params.label ? <Row label={tr('For', 'Pour')} value={params.label} /> : null}
         </Card>
         <Button title={t('done')} onPress={() => router.back()} />
+        {params.kind === 'request' && <Button title={tr('My requests', 'Mes demandes')} variant="secondary" onPress={() => router.replace(`/requests/${params.id}`)} />}
+        <Button title={tr('Payment history', 'Historique des paiements')} variant="ghost" size="md" onPress={() => router.replace('/payments')} />
       </Screen>
     );
   }
@@ -116,16 +129,32 @@ export default function Pay() {
       </View>
 
       <Card style={{ gap: space.md }}>
-        <Field
-          label={t('cardNumber')}
-          value={card}
-          onChangeText={(v) => setCard(formatCard(v))}
-          keyboardType="number-pad"
-          placeholder="4242 4242 4242 4242"
-          autoComplete="cc-number"
-          style={{ fontFamily: fonts.mono, letterSpacing: 1 }}
-        />
-        <Button title={t('payWithCard')} icon="card" onPress={() => pay('card')} loading={busy === 'card'} disabled={!!busy || card.replace(/\s/g, '').length < 12} />
+        {!!cards.data?.length && (
+          <View>
+            {cards.data.map((sc) => (
+              <ListItem key={sc.id} icon={savedId === sc.id ? 'radio-button-on' : 'radio-button-off'} title={`${sc.brand.toUpperCase()} •••• ${sc.last4}`} subtitle={`${tr('Saved card · expires', 'Carte enregistrée · expire')} ${sc.expiry}`} onPress={() => setSavedId(savedId === sc.id ? undefined : sc.id)} />
+            ))}
+            <ListItem icon={!savedId ? 'radio-button-on' : 'radio-button-off'} title={tr('Use a new card', 'Utiliser une nouvelle carte')} onPress={() => setSavedId(undefined)} />
+          </View>
+        )}
+        {!savedId && (
+          <>
+            <Field
+              label={t('cardNumber')}
+              value={card}
+              onChangeText={(v) => setCard(formatCard(v))}
+              keyboardType="number-pad"
+              placeholder="4242 4242 4242 4242"
+              autoComplete="cc-number"
+              style={{ fontFamily: fonts.mono, letterSpacing: 1 }}
+            />
+            <Field label={tr('Expiry (MM/YY)', 'Expiration (MM/AA)')} value={expiry} onChangeText={(v) => setExpiry(v.replace(/[^\d/]/g, '').slice(0, 5))} placeholder="08/29" keyboardType="number-pad" autoComplete="cc-exp" />
+            <Check checked={saveCard} onToggle={() => setSaveCard((s) => !s)}>
+              {tr('Save this card for next time', 'Enregistrer cette carte pour la prochaine fois')}
+            </Check>
+          </>
+        )}
+        <Button title={t('payWithCard')} icon="card" onPress={() => pay('card')} loading={busy === 'card'} disabled={!!busy || (!savedId && card.replace(/\s/g, '').length < 12)} />
       </Card>
     </Screen>
   );

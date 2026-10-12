@@ -10,7 +10,10 @@ A mobile app (iOS and Android) plus a backend API that puts your **driver's lice
 apps/
   mobile/   Expo (React Native) app: iOS, Android, plus a web build for previews
   api/      Fastify + TypeScript API: accounts, wallet, camera-ticket ingestion, payments
-e2e/        Playwright script that clicks through 21 user flows against the real API
+packages/
+  shared/   Platform core shared by the API and the app's demo backend: service directory,
+            request lifecycle, appointments, consents, plates, password/PIN rules, dashboard actions
+e2e/        Playwright scripts: user flows against the real API, and against the single-file demo page
 docs/       Sanad research, architecture, Ontario legal/policy notes, store release guide
 ```
 
@@ -23,8 +26,16 @@ docs/       Sanad research, architecture, Ontario legal/policy notes, store rele
 | **Pay & dispute** | Apple Pay, Google Pay, Interac, card. Request an early-resolution meeting or a trial from the ticket. |
 | **Vehicles** | Plate renewal (blocked while tickets are overdue), insurance status, tickets per vehicle. |
 | **Services** | Renew licence, change address (updates every document at once), driver record, road test, ownership transfer, accessible parking permit, health card renewal. |
-| **Inbox** | Official notifications with deep links into the app. |
-| **Digital signature** | Consent-based e-signing tied to the verified identity. |
+| **Home dashboard** | Sanad-style widgets: what needs your attention, favourite cards, quick access, tickets with Pay all, favourite services, next appointment. |
+| **Services directory** | By category or organization, with a service card (channels, fees, steps, conditions, documents) and a step-by-step application. |
+| **My requests** | Every request with its status (in review, awaiting payment, action required, completed…), timeline, pay later, cancel, resubmit. |
+| **Appointments** | Book ServiceOntario or DriveTest visits, acknowledge requirements, check in for a queue ticket. |
+| **Data requests** | Companies ask to read specific data; approve with your PIN, reject or revoke. |
+| **Personalized plates** | Check a combination, get suggestions, order and pay. |
+| **Inbox** | Official notifications with deep links, unread filter, mark all read. |
+| **Digital signature** | Draw or reuse a saved signature, confirm with the digital ID PIN; signed copies kept 7 days. |
+| **Account** | Digital ID PIN, password rules, forgot password with SMS code, favourites, notification settings, saved cards, payment history. |
+| **Help** | FAQ, suggestions and complaints, rating, suggest a new service, locations. Guests can browse services, locations and help. |
 | **Verifier mode** | Police and retailers scan and verify a QR code. Tampered, expired or revoked codes fail. |
 | **Trust & privacy** | "Who verified my ID" log, revoke all QR codes for a lost phone, Face ID / fingerprint lock, Keychain/Keystore token storage. |
 | **Bilingual** | English and French throughout. |
@@ -77,7 +88,8 @@ The ticket appears in the demo user's **Tickets** tab and **Inbox** right away.
 ## Checks
 
 ```bash
-cd apps/api && npm test            # 25 API tests (auth, camera matching, payments, signatures, revocation…)
+cd apps/api && npm test            # 50 API tests (auth, camera matching, payments, requests, appointments, consents, plates…)
+node scripts/sync-shared.mjs       # after editing packages/shared (a test fails if the copies drift)
 cd apps/api && npm run typecheck
 cd apps/mobile && npm run typecheck && npm run lint
 # Full UI flows (API on :4000, web build served on :8081):

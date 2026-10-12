@@ -25,6 +25,9 @@ const light = {
   warningBg: '#FFF3DC',
   success: '#12795A',
   successBg: '#E1F3EB',
+  /** Highlight for announcements and "needs attention" (Sanad's gold). */
+  gold: '#8A6100',
+  goldBg: '#FFF6D6',
   watermark: 'rgba(255, 120, 108, 0.75)',
   /** Card shadow; dark mode relies on a hairline border instead. */
   shadow: '0px 8px 24px rgba(13, 21, 34, 0.07), 0px 1px 2px rgba(13, 21, 34, 0.05)',
@@ -51,6 +54,8 @@ const dark: typeof light = {
   warningBg: '#33240C',
   success: '#5AD1A2',
   successBg: '#0E2C22',
+  gold: '#F2C94C',
+  goldBg: '#2E2508',
   watermark: 'rgba(255, 150, 140, 0.8)',
   shadow: 'none',
   shadowStrong: '0px 18px 40px rgba(0, 0, 0, 0.55)',

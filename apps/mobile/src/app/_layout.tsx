@@ -21,7 +21,7 @@ import { usePushRegistration } from '../lib/push';
 
 function RootNavigator() {
   const { status } = useAuth();
-  const { t } = useI18n();
+  const { t, tr } = useI18n();
   const c = useTheme();
   usePushRegistration(status === 'signedIn');
 
@@ -47,18 +47,39 @@ function RootNavigator() {
         <Stack.Screen name="fine/[id]" options={{ title: '' }} />
         <Stack.Screen name="dispute/[id]" options={{ title: t('dispute'), presentation: 'modal' }} />
         <Stack.Screen name="pay" options={{ title: t('payTitle'), presentation: 'modal' }} />
-        <Stack.Screen name="services/index" options={{ title: t('servicesTitle') }} />
-        <Stack.Screen name="services/[id]" options={{ title: '' }} />
         <Stack.Screen name="inbox" options={{ title: t('inboxTitle') }} />
-        <Stack.Screen name="sign" options={{ title: t('signTitle') }} />
+        <Stack.Screen name="sign" options={{ title: tr('My signature', 'Ma signature') }} />
         <Stack.Screen name="access-log" options={{ title: t('accessLog') }} />
-        <Stack.Screen name="payments" options={{ title: t('payments') }} />
+        <Stack.Screen name="payments" options={{ title: tr('Payment history', 'Historique des paiements') }} />
+        <Stack.Screen name="payment/[id]" options={{ title: tr('Payment details', 'Détails du paiement') }} />
+        <Stack.Screen name="vehicles" options={{ title: '' }} />
+        <Stack.Screen name="requests/index" options={{ title: tr('My requests', 'Mes demandes') }} />
+        <Stack.Screen name="requests/[id]" options={{ title: tr('Request', 'Demande') }} />
+        <Stack.Screen name="appointments/index" options={{ title: tr('My appointments', 'Mes rendez-vous') }} />
+        <Stack.Screen name="appointments/book" options={{ title: tr('Book an appointment', 'Prendre rendez-vous') }} />
+        <Stack.Screen name="appointments/[id]" options={{ title: tr('Appointment', 'Rendez-vous') }} />
+        <Stack.Screen name="consents" options={{ title: tr('Data requests', 'Demandes de données') }} />
+        <Stack.Screen name="plates" options={{ title: tr('Personalized plates', 'Plaques personnalisées') }} />
+        <Stack.Screen name="favourites" options={{ title: tr('Favourites', 'Favoris') }} />
+        <Stack.Screen name="cards" options={{ title: tr('Saved cards', 'Cartes enregistrées') }} />
+        <Stack.Screen name="notifications" options={{ title: tr('Notifications', 'Notifications') }} />
+        <Stack.Screen name="security/password" options={{ title: tr('Change password', 'Changer le mot de passe') }} />
+        <Stack.Screen name="security/pin" options={{ title: tr('Digital ID PIN', 'NIP d’identité numérique') }} />
       </Stack.Protected>
       <Stack.Protected guard={status === 'signedOut'}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       </Stack.Protected>
-      {/* Verifying someone else's QR code works signed in or out. */}
+      {/* Guest access (Sanad lets non-activated users browse): verify a QR code,
+          browse services, find a location, read help. Signed in or out. */}
       <Stack.Screen name="verify" options={{ title: t('verifyTitle') }} />
+      <Stack.Screen name="directory" options={{ title: tr('Services', 'Services') }} />
+      <Stack.Screen name="services/[id]" options={{ title: '' }} />
+      <Stack.Screen name="locations" options={{ title: tr('Locations', 'Bureaux') }} />
+      <Stack.Screen name="help/index" options={{ title: tr('Help centre', 'Centre d’aide') }} />
+      <Stack.Screen name="help/feedback" options={{ title: tr('Suggestions and complaints', 'Suggestions et plaintes') }} />
+      <Stack.Screen name="help/rate" options={{ title: tr('Rate your experience', 'Évaluez votre expérience') }} />
+      <Stack.Screen name="help/about" options={{ title: tr('About', 'À propos') }} />
+      <Stack.Screen name="help/privacy" options={{ title: tr('Privacy policy', 'Politique de confidentialité') }} />
     </Stack>
   );
 }

@@ -1,5 +1,11 @@
 import type {
   Account,
+  Appointment,
+  Consent,
+  Feedback,
+  Otp,
+  Preferences,
+  SavedCard,
   AccessLogEntry,
   Credential,
   Fine,
@@ -32,6 +38,15 @@ export class Store {
   serviceRequests = new Map<string, ServiceRequest>();
   signatures = new Map<string, SignatureRecord>();
   accessLog = new Map<string, AccessLogEntry>();
+  appointments = new Map<string, Appointment>();
+  consents = new Map<string, Consent>();
+  cards = new Map<string, SavedCard>();
+  preferences = new Map<string, Preferences>();
+  feedback: Feedback[] = [];
+  otps = new Map<string, Otp>();
+  passwordResets = new Map<string, { id: string; accountId?: string; otpId?: string; verified: boolean; expiresAt: number }>();
+  /** Personalized plate combinations ordered through the app. */
+  reservedPlates = new Set<string>();
   unmatchedCameraEvents: UnmatchedCameraEvent[] = [];
   /** Idempotency: upstream camera event id -> fine id. */
   processedCameraEvents = new Map<string, string>();
@@ -91,6 +106,22 @@ export class Store {
     return [...this.payments.values()]
       .filter((p) => p.accountId === accountId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  requestsFor(accountId: string) {
+    return [...this.serviceRequests.values()].filter((r) => r.accountId === accountId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  appointmentsFor(accountId: string): Appointment[] {
+    return [...this.appointments.values()].filter((a) => a.accountId === accountId).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  }
+
+  consentsFor(accountId: string): Consent[] {
+    return [...this.consents.values()].filter((c) => c.accountId === accountId).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+  }
+
+  cardsFor(accountId: string): SavedCard[] {
+    return [...this.cards.values()].filter((c) => c.accountId === accountId);
   }
 
   accessLogFor(accountId: string): AccessLogEntry[] {

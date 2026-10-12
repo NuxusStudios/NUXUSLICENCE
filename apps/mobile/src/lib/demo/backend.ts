@@ -12,7 +12,53 @@
 // ship inside an app.
 
 import { base64url, fromBase64url, sha256Hex } from './hash';
-import { SERVICES } from './catalog';
+import {
+  FAQ,
+  LOCATIONS,
+  ORGANIZATIONS,
+  PlatformError,
+  SERVICES,
+  SIGNED_RETENTION_DAYS,
+  appointmentView,
+  assertPassword,
+  assertPin,
+  availableSlots,
+  bookAppointment,
+  bookableDates,
+  cancelAppointment,
+  cancelRequest,
+  cardBrand,
+  checkIn,
+  checkPlate,
+  consentView,
+  createRequest,
+  dashboardActions,
+  decideConsent,
+  defaultPreferences,
+  driverRecordResult,
+  issueOtp,
+  mergePreferences,
+  payRequest,
+  phoneHint,
+  resubmitRequest,
+  samePhone,
+  sampleAppointment,
+  sampleConsents,
+  sampleRequests,
+  serviceById,
+  validateFeedback,
+  validateServiceData,
+  vehicleHistoryResult,
+  verifyOtp,
+  visitName,
+  type Appointment,
+  type Consent,
+  type Feedback,
+  type Otp,
+  type Preferences,
+  type SavedCard,
+  type ServiceRequest as Req,
+} from '../shared/platform';
 import type {
   AccessLogEntry,
   Address,
@@ -23,7 +69,6 @@ import type {
   Payment,
   PaymentMethod,
   Person,
-  ServiceRequest,
   SignatureRecord,
   Vehicle,
 } from '../types';
@@ -45,6 +90,8 @@ interface Account {
   phone?: string;
   language: 'en' | 'fr';
   createdAt: string;
+  pin?: string;
+  savedSignature?: string;
 }
 
 const DAY = 86400_000;
@@ -75,7 +122,19 @@ const accounts = new Map<string, Account>();
 const fines = new Map<string, FineRec>();
 const inbox = new Map<string, InboxMessage & { accountId: string }>();
 const payments = new Map<string, Payment & { accountId: string }>();
-const requests = new Map<string, ServiceRequest & { accountId: string; data: Record<string, string> }>();
+const requests = new Map<string, Req>();
+const appointments = new Map<string, Appointment>();
+const consents = new Map<string, Consent>();
+const cards = new Map<string, SavedCard>();
+const preferences = new Map<string, Preferences>();
+const feedback: Feedback[] = [];
+const otps = new Map<string, Otp>();
+const resets = new Map<string, { id: string; accountId?: string; otpId?: string; verified: boolean; expiresAt: number }>();
+const reservedPlates = new Set<string>();
+/** Demo PIN for the sample account; shown on the PIN prompt in demo mode. */
+export const DEMO_PIN = '2580';
+/** One-time codes in demo mode are always this (no SMS is sent). */
+export const DEMO_CODE = '246810';
 const signatures = new Map<string, SignatureRecord & { accountId: string }>();
 const accessLog = new Map<string, AccessLogEntry & { accountId: string }>();
 const walletRevokedAt = new Map<string, number>();
@@ -100,7 +159,14 @@ function seed() {
   ];
   for (const c of creds) credentials.set(c.id, c);
 
-  accounts.set('acc_alex', { id: 'acc_alex', personId: 'per_alex', email: 'demo@civicpass.example', password: 'Demo1234!', phone: '+1 416 555 0100', language: 'en', createdAt: iso(-200) });
+  accounts.set('acc_alex', { id: 'acc_alex', personId: 'per_alex', email: 'demo@civicpass.example', password: 'Demo1234!', phone: '+1 416 555 0100', language: 'en', createdAt: iso(-200), pin: DEMO_PIN });
+  const now = new Date();
+  for (const r of sampleRequests('acc_alex', now, newId, ref)) requests.set(r.id, r);
+  for (const c of sampleConsents('acc_alex', now, newId)) consents.set(c.id, c);
+  const apt = sampleAppointment('acc_alex', now, newId, ref);
+  appointments.set(apt.id, apt);
+  cards.set('card_alex_visa', { id: 'card_alex_visa', accountId: 'acc_alex', brand: 'visa', last4: '4242', expiry: '08/29', addedAt: iso(-200) });
+  preferences.set('acc_alex', { ...defaultPreferences(), favouriteCards: ['cred_alex_dl', 'cred_alex_vp_car', 'cred_alex_hc'] });
 
   const seeded: FineRec[] = [
     { id: 'fine_rlc_1', externalId: 'JPC-RLC-2026-000187', source: 'red_light_camera', liability: 'owner', personId: 'per_alex', vehicleId: 'veh_alex_car', plate: 'CVPS 123', offence: 'Fail to stop for red light — vehicle owner (camera)', statute: 'Highway Traffic Act — red light camera, owner liability', location: 'Example Ave & Sample St (northbound)', municipality: 'Toronto', occurredAt: iso(-6), issuedAt: iso(-3), dueDate: iso(12), ...totals(325), demeritPoints: 0, status: 'outstanding', evidence: { images: ['evidence://a', 'evidence://b'], secondsIntoRed: 1.4 } },
@@ -110,7 +176,9 @@ function seed() {
   ];
   for (const f of seeded) fines.set(f.id, f);
 
-  payments.set('pay_hist_1', { id: 'pay_hist_1', accountId: 'acc_alex', purpose: 'fine', referenceId: 'fine_ase_1', amount: 65, currency: 'CAD', method: 'apple_pay', status: 'succeeded', receiptNumber: 'RCPT-DEMO-0001', createdAt: '2025-10-11T16:30:00.000Z' });
+  payments.set('pay_hist_1', { id: 'pay_hist_1', accountId: 'acc_alex', purpose: 'fine', referenceId: 'fine_ase_1', amount: 65, currency: 'CAD', method: 'apple_pay', status: 'succeeded', receiptNumber: 'RCPT-DEMO-0001', createdAt: '2025-10-11T16:30:00.000Z', label: 'Ticket JPC-ASE-2025-104552' });
+  payments.set('pay_hist_2', { id: 'pay_hist_2', accountId: 'acc_alex', purpose: 'service_fee', referenceId: 'driver-record', amount: 12, currency: 'CAD', method: 'card', status: 'succeeded', receiptNumber: 'RCPT-DEMO-0002', createdAt: iso(-12), label: 'Driver record (abstract)', cardLast4: '4242' });
+  payments.set('pay_hist_3', { id: 'pay_hist_3', accountId: 'acc_alex', purpose: 'service_fee', referenceId: 'birth-certificate', amount: 25, currency: 'CAD', method: 'interac', status: 'succeeded', receiptNumber: 'RCPT-DEMO-0003', createdAt: iso(-1), label: 'Birth certificate' });
 
   const msgs: Omit<InboxMessage, 'id'>[] = [
     { category: 'security', title: 'New device signed in', body: 'Your account was signed in on a new iPhone. If this was not you, use Account → Lost your phone.', createdAt: iso(-30), read: true },
@@ -152,10 +220,80 @@ function notify(accountId: string, m: Pick<InboxMessage, 'category' | 'title' | 
   inbox.set(id, { id, accountId, createdAt: new Date().toISOString(), read: false, ...m });
 }
 
-function charge(accountId: string, purpose: Payment['purpose'], referenceId: string, amount: number, method: PaymentMethod, token: string) {
-  const p = { id: newId('pay'), accountId, purpose, referenceId, amount: Math.round(amount * 100) / 100, currency: 'CAD' as const, method, status: token === 'tok_decline' ? ('failed' as const) : ('succeeded' as const), receiptNumber: ref('RCPT'), createdAt: new Date().toISOString() };
+function charge(accountId: string, purpose: Payment['purpose'], referenceId: string, amount: number, method: PaymentMethod, token: string, label?: string, cardLast4?: string) {
+  const p = { id: newId('pay'), accountId, purpose, referenceId, amount: Math.round(amount * 100) / 100, currency: 'CAD' as const, method, status: token === 'tok_decline' ? ('failed' as const) : ('succeeded' as const), receiptNumber: ref('RCPT'), createdAt: new Date().toISOString(), ...(label ? { label } : {}), ...(cardLast4 ? { cardLast4 } : {}) };
   payments.set(p.id, p);
   return p;
+}
+
+type Body = Record<string, any> | undefined;
+
+/** Charges and fails with 402 on decline; handles saved cards like the API. */
+function takePayment(a: Account, purpose: Payment['purpose'], referenceId: string, amount: number, label: string, body: Body) {
+  if (!body?.method || !body?.paymentToken) return fail(400, 'payment_required', 'Payment details required');
+  let last4: string | undefined = body.saveCard?.last4;
+  if (body.cardId) {
+    const card = cards.get(body.cardId);
+    if (!card || card.accountId !== a.id) fail(404, 'not_found', 'Card not found');
+    last4 = card!.last4;
+  }
+  const p = charge(a.id, purpose, referenceId, amount, body.method, String(body.paymentToken), label, last4);
+  if (p.status !== 'succeeded') fail(402, 'payment_declined', 'Payment was declined');
+  const sc = body.saveCard as { last4: string; expiry: string; brand?: SavedCard['brand'] } | undefined;
+  if (sc && ![...cards.values()].some((c) => c.accountId === a.id && c.last4 === sc.last4 && c.expiry === sc.expiry)) {
+    const id = newId('card');
+    cards.set(id, { id, accountId: a.id, brand: sc.brand ?? cardBrand(sc.last4), last4: sc.last4, expiry: sc.expiry, addedAt: new Date().toISOString() });
+  }
+  return p;
+}
+
+const requestsOf = (accountId: string) => [...requests.values()].filter((r) => r.accountId === accountId).sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+const appointmentsOf = (accountId: string) => [...appointments.values()].filter((x) => x.accountId === accountId).sort((x, y) => x.startsAt.localeCompare(y.startsAt));
+const consentsOf = (accountId: string) => [...consents.values()].filter((c) => c.accountId === accountId).sort((x, y) => y.requestedAt.localeCompare(x.requestedAt));
+const prefsOf = (accountId: string) => preferences.get(accountId) ?? defaultPreferences();
+
+function findAccount(identifier: string): Account | undefined {
+  const id = identifier.trim().toLowerCase();
+  if (id.includes('@')) return [...accounts.values()].find((x) => x.email === id);
+  const p = [...people.values()].find((x) => norm(x.licenceNumber) === norm(identifier));
+  return p ? [...accounts.values()].find((x) => x.personId === p.id) : undefined;
+}
+
+function requirePin(a: Account, pin: unknown) {
+  if (!a.pin) fail(409, 'pin_not_set', 'Set a digital ID PIN under Account first.');
+  if (String(pin ?? '') !== a.pin) fail(422, 'wrong_pin', 'The digital ID PIN is incorrect.');
+}
+
+function sendOtp(target: string) {
+  const otp = issueOtp(newId('otp'), target, DEMO_CODE, new Date());
+  otps.set(otp.id, otp);
+  return { otpId: otp.id, devCode: otp.code };
+}
+
+const STATUS_TEXT: Record<Req['status'], string> = { in_review: 'in review', action_required: 'action required', awaiting_payment: 'awaiting payment', completed: 'completed', rejected: 'rejected', cancelled: 'cancelled' };
+function notifyRequest(a: Account, r: Req) {
+  notify(a.id, { category: 'service', title: `${serviceById(r.serviceId)?.name.en ?? r.serviceId}: ${STATUS_TEXT[r.status]}`, body: `Request ${r.reference}.`, link: `/requests/${r.id}` });
+}
+
+/** Registry side effects and results of a completed request (mirrors apps/api completeRequest). */
+function completeRequest(a: Account, r: Req) {
+  const person = people.get(a.personId)!;
+  const dl = [...credentials.values()].find((c) => c.personId === a.personId && c.type === 'driver_licence');
+  if (r.serviceId === 'change-address') {
+    person.address = { ...person.address, line1: r.data.line1!, line2: undefined, city: r.data.city!, postalCode: r.data.postalCode!.toUpperCase() };
+  }
+  if (r.serviceId === 'renew-licence' && dl) {
+    const base = new Date(Math.max(Date.now(), new Date(dl.expiresOn).getTime()));
+    base.setUTCFullYear(base.getUTCFullYear() + 5);
+    dl.expiresOn = base.toISOString().slice(0, 10);
+    dl.issuedOn = new Date().toISOString().slice(0, 10);
+    r.result = { title: { en: 'Licence renewed', fr: 'Permis renouvelé' }, lines: [{ label: { en: 'New expiry date', fr: 'Nouvelle date d’expiration' }, value: dl.expiresOn }] };
+  }
+  if (r.serviceId === 'driver-record') {
+    const convictions = finesOf(a.personId).filter((f) => f.liability === 'driver' && f.status === 'paid').map((f) => ({ date: f.occurredAt.slice(0, 10), offence: f.offence, points: f.demeritPoints }));
+    r.result = driverRecordResult({ licenceNumber: person.licenceNumber, licenceClass: dl?.licenceClass, status: dl?.status ?? 'none', expiresOn: dl?.expiresOn ?? '—', convictions, period: r.data.years ?? '3 years' });
+  }
+  if (r.serviceId === 'vehicle-history') r.result = vehicleHistoryResult(r.data.vin ?? '');
 }
 
 function age(dob: string): number {
@@ -211,6 +349,15 @@ function summary(a: Account) {
       ...[...vehicles.values()].filter((v) => v.ownerPersonId === a.personId && new Date(v.plateValidationExpires).getTime() < soon).map((v) => ({ kind: 'plate', id: v.id, label: v.plate, expiresOn: v.plateValidationExpires })),
       ...[...credentials.values()].filter((c) => c.personId === a.personId && c.type !== 'vehicle_permit' && new Date(c.expiresOn).getTime() < soon).map((c) => ({ kind: c.type, id: c.id, label: c.documentNumber, expiresOn: c.expiresOn })),
     ],
+    actions: dashboardActions({
+      now: new Date(),
+      credentials: [...credentials.values()].filter((c) => c.personId === a.personId && c.type !== 'vehicle_permit'),
+      vehicles: [...vehicles.values()].filter((v) => v.ownerPersonId === a.personId),
+      overdueTickets: open.filter((f) => f.status === 'overdue').length,
+      requests: requestsOf(a.id),
+      consents: consentsOf(a.id),
+      appointments: appointmentsOf(a.id),
+    }),
   };
 }
 
@@ -257,60 +404,120 @@ function simulateCameraTicket(a: Account) {
 // router
 // ---------------------------------------------------------------------------
 
-type Body = Record<string, any> | undefined;
+// Second path segment -> index of the record id in the path.
+const ID_AT: Record<string, number> = { wallet: 2, vehicles: 2, fines: 2, services: 2, inbox: 2, 'service-requests': 2, appointments: 2, consents: 2, locations: 2 };
+const NOT_IDS = new Set(['pay-all', 'read-all', 'start', 'orders', 'check']);
 
 export async function demoRequest(method: string, path: string, body: Body, token: string | null): Promise<unknown> {
   // A short pause so loading states behave like the real network.
   await new Promise((r) => setTimeout(r, 120));
+  try {
+    return route(method, path, body, token);
+  } catch (e) {
+    if (e instanceof PlatformError) throw new DemoHttpError(e.status, e.code, e.message);
+    throw e;
+  }
+}
+
+function route(method: string, path: string, body: Body, token: string | null): unknown {
   const m = method.toUpperCase();
-  const seg = path.split('?')[0]!.split('/').filter(Boolean); // ['v1', ...]
-  // Collections whose second segment is a record id: /v1/fines/:id/pay etc.
-  const withIds = new Set(['wallet', 'vehicles', 'fines', 'services', 'inbox']);
-  const id = withIds.has(seg[1] ?? '') ? seg[2] : undefined;
-  const route = `${m} /${seg.slice(1).map((s, i) => (i === 1 && id ? ':id' : s)).join('/')}`;
+  const [pathname, search] = path.split('?');
+  const query = new URLSearchParams(search ?? '');
+  const seg = pathname!.split('/').filter(Boolean); // ['v1', ...]
+  let at = ID_AT[seg[1] ?? ''];
+  if (seg[1] === 'me' && seg[2] === 'cards') at = 3;
+  if (seg[1] === 'auth' && seg[2] === 'password-reset') at = 3;
+  const id = at && seg[at] && !NOT_IDS.has(seg[at]!) ? seg[at] : undefined;
+  const route = `${m} /${seg.slice(1).map((s, i) => (i + 1 === at && id ? ':id' : s)).join('/')}`;
+  const now = new Date();
 
   // ---- public ---------------------------------------------------------------
-  if (route === 'POST /auth/login') {
-    const a = [...accounts.values()].find((x) => x.email === String(body?.email ?? '').trim().toLowerCase());
-    if (!a || a.password !== body?.password) fail(401, 'invalid_credentials', 'Email or password is incorrect.');
-    return login(a!.id);
-  }
-  if (route === 'POST /auth/register') {
-    const b = body ?? {};
-    if (!String(b.email).includes('@') || String(b.password ?? '').length < 8) fail(400, 'validation_error', 'Enter a valid email and a password of at least 8 characters.');
-    const person = [...people.values()].find((p) => norm(p.licenceNumber) === norm(String(b.licenceNumber ?? '')));
-    if (!person || person.dateOfBirth !== b.dateOfBirth) fail(422, 'identity_not_matched', 'We could not match these details to a licensing record.');
-    if ([...accounts.values()].some((a) => a.personId === person!.id)) fail(409, 'already_registered', 'An account already exists for this person.');
-    if ([...accounts.values()].some((a) => a.email === String(b.email).toLowerCase())) fail(409, 'email_taken', 'This email is already in use.');
-    const a: Account = { id: newId('acc'), personId: person!.id, email: String(b.email).toLowerCase(), password: b.password, phone: b.phone, language: b.language ?? 'en', createdAt: new Date().toISOString() };
-    accounts.set(a.id, a);
-    const pending = finesOf(person!.id).filter((f) => f.status === 'outstanding').length;
-    notify(a.id, { category: 'general', title: 'Welcome to your digital wallet', body: pending ? `Your documents are ready. You have ${pending} outstanding ticket(s) linked to your record.` : 'Your documents are ready to use.' });
-    return login(a.id);
-  }
-  if (route === 'GET /services') return SERVICES;
-  if (route === 'POST /verify') {
-    const parts = String(body?.token ?? '').trim().split('.');
-    if (parts.length !== 3 || parts[0] !== 'demo' || seal(parts[1]!) !== parts[2]) return { valid: false, reason: 'bad_signature' };
-    let payload: any;
-    try {
-      payload = JSON.parse(fromBase64url(parts[1]!));
-    } catch {
-      return { valid: false, reason: 'bad_signature' };
+  switch (route) {
+    case 'POST /auth/login': {
+      const a = findAccount(String(body?.email ?? ''));
+      if (!a || a.password !== body?.password) fail(401, 'invalid_credentials', 'Email, licence number or password is incorrect.');
+      return login(a!.id);
     }
-    if (payload.exp * 1000 < Date.now()) return { valid: false, reason: 'expired' };
-    const c = credentials.get(payload.cid);
-    if (!c) return { valid: false, reason: 'unknown_credential' };
-    const owner = [...accounts.values()].find((a) => a.personId === c.personId);
-    const wiped = owner ? walletRevokedAt.get(owner.id) : undefined;
-    if (wiped && payload.iat * 1000 <= wiped) return { valid: false, reason: 'revoked' };
-    const view = credentialView(c);
-    if (view.status !== 'valid') return { valid: false, reason: `credential_${view.status}` };
-    if (owner) {
-      const lid = newId('log');
-      accessLog.set(lid, { id: lid, accountId: owner.id, credentialId: c.id, verifier: String(body?.verifier || 'Unidentified verifier'), claims: Object.keys(payload.claims ?? {}), verifiedAt: new Date().toISOString() });
+    case 'POST /auth/otp':
+      if (String(body?.phone ?? '').replace(/\D/g, '').length < 7) fail(400, 'validation_error', 'Enter a valid mobile number.');
+      return sendOtp(String(body!.phone));
+    case 'POST /auth/register': {
+      const b = body ?? {};
+      if (!String(b.email).includes('@')) fail(400, 'validation_error', 'Enter a valid email.');
+      assertPassword(String(b.password ?? ''));
+      if (b.pin) assertPin(String(b.pin));
+      if (b.otpId) {
+        const otp = otps.get(b.otpId);
+        verifyOtp(otp, String(b.otpCode ?? ''), now);
+        if (!samePhone(String(b.phone ?? ''), otp!.target)) fail(422, 'otp_invalid', 'The code was sent to a different number.');
+      }
+      const person = [...people.values()].find((p) => norm(p.licenceNumber) === norm(String(b.licenceNumber ?? '')));
+      if (!person || person.dateOfBirth !== b.dateOfBirth) fail(422, 'identity_not_matched', 'We could not match these details to a licensing record.');
+      if ([...accounts.values()].some((a) => a.personId === person!.id)) fail(409, 'already_registered', 'An account already exists for this person.');
+      if ([...accounts.values()].some((a) => a.email === String(b.email).toLowerCase())) fail(409, 'email_taken', 'This email is already in use.');
+      const a: Account = { id: newId('acc'), personId: person!.id, email: String(b.email).toLowerCase(), password: b.password, phone: b.phone, language: b.language ?? 'en', createdAt: now.toISOString(), ...(b.pin ? { pin: String(b.pin) } : {}) };
+      accounts.set(a.id, a);
+      for (const c of sampleConsents(a.id, now, newId).filter((c) => c.status === 'pending')) consents.set(c.id, c);
+      const pending = finesOf(person!.id).filter((f) => f.status === 'outstanding').length;
+      notify(a.id, { category: 'general', title: 'Welcome to your digital wallet', body: pending ? `Your documents are ready. You have ${pending} outstanding ticket(s) linked to your record.` : 'Your documents are ready to use.' });
+      return login(a.id);
     }
-    return { valid: true, credentialType: c.type, disclosure: payload.disclosure, claims: payload.claims, issuedAt: payload.iat, expiresAt: payload.exp };
+    case 'POST /auth/password-reset/start': {
+      const a = findAccount(String(body?.identifier ?? ''));
+      const r = { id: newId('rst'), accountId: a?.id, verified: false, expiresAt: Date.now() + 15 * 60_000 };
+      resets.set(r.id, r);
+      return { resetId: r.id, phoneHint: phoneHint(a?.phone) };
+    }
+    case 'POST /auth/password-reset/:id/phone':
+    case 'POST /auth/password-reset/:id/verify':
+    case 'POST /auth/password-reset/:id/complete': {
+      const r = resets.get(id!);
+      if (!r || r.expiresAt < Date.now()) return fail(410, 'reset_expired', 'Start again.');
+      const a = r.accountId ? accounts.get(r.accountId) : undefined;
+      if (route.endsWith('/phone')) {
+        if (!a || !samePhone(String(body?.phone ?? ''), a.phone)) fail(422, 'phone_mismatch', 'That number doesn’t match the one on the account.');
+        const sent = sendOtp(a!.phone!);
+        r.otpId = sent.otpId;
+        return { sent: true, devCode: sent.devCode };
+      }
+      if (route.endsWith('/verify')) {
+        verifyOtp(r.otpId ? otps.get(r.otpId) : undefined, String(body?.code ?? ''), now);
+        r.verified = true;
+        return { ok: true };
+      }
+      if (!r.verified || !a) fail(409, 'not_verified', 'Verify the code first.');
+      assertPassword(String(body?.password ?? ''));
+      a!.password = String(body!.password);
+      resets.delete(r.id);
+      notify(a!.id, { category: 'security', title: 'Password reset', body: 'Your password was reset with a code sent to your phone.' });
+      return { ok: true };
+    }
+    case 'GET /services':
+      return SERVICES;
+    case 'GET /directory':
+      return { organizations: ORGANIZATIONS, services: SERVICES.filter((s) => !s.hidden) };
+    case 'GET /locations':
+      return LOCATIONS;
+    case 'GET /locations/:id/slots': {
+      const dates = bookableDates(now);
+      const q = query.get('date');
+      const date = q && dates.includes(q) ? q : dates[0]!;
+      const booked = new Set([...appointments.values()].filter((x) => x.status !== 'cancelled').map((x) => `${x.locationId}|${x.startsAt}`));
+      return { dates, date, slots: availableSlots(id!, date, booked, now) };
+    }
+    case 'GET /faq':
+      return FAQ;
+    case 'POST /plates/check':
+      return checkPlate(String(body?.plate ?? ''), reservedPlates);
+    case 'POST /feedback': {
+      const f = { kind: body?.kind, topic: body?.topic, message: body?.message, rating: body?.rating, improvements: body?.improvements };
+      validateFeedback(f);
+      const item: Feedback = { ...f, id: newId('fb'), accountId: token ? sessions.get(token) : undefined, reference: ref('FB'), createdAt: now.toISOString() };
+      feedback.push(item);
+      return { reference: item.reference };
+    }
+    case 'POST /verify':
+      return verify(body);
   }
 
   // ---- signed in ------------------------------------------------------------
@@ -318,10 +525,25 @@ export async function demoRequest(method: string, path: string, body: Body, toke
   const a = accountId ? accounts.get(accountId) : undefined;
   if (!a) return fail(401, 'unauthenticated', 'Please sign in again.');
   const person = people.get(a.personId)!;
+  const ownRequest = () => {
+    const r = requests.get(id!);
+    if (!r || r.accountId !== a.id) fail(404, 'not_found', 'Request not found');
+    return r!;
+  };
+  const ownAppointment = () => {
+    const x = appointments.get(id!);
+    if (!x || x.accountId !== a.id) fail(404, 'not_found', 'Appointment not found');
+    return x!;
+  };
+  const ownVehicle = (vid: string) => {
+    const v = vehicles.get(vid);
+    if (!v || v.ownerPersonId !== a.personId) fail(404, 'not_found', 'Vehicle not found');
+    return v!;
+  };
 
   switch (route) {
     case 'GET /me':
-      return { account: { id: a.id, email: a.email, phone: a.phone, language: a.language, identityAssurance: 'IAL2', createdAt: a.createdAt }, person, summary: summary(a) };
+      return { account: { id: a.id, email: a.email, phone: a.phone, language: a.language, identityAssurance: 'IAL2', createdAt: a.createdAt, pinSet: !!a.pin }, person, summary: summary(a), preferences: prefsOf(a.id) };
     case 'PATCH /me':
       if (body?.language) a.language = body.language;
       if (body?.phone) a.phone = body.phone;
@@ -334,6 +556,41 @@ export async function demoRequest(method: string, path: string, body: Body, toke
       walletRevokedAt.set(a.id, Date.now());
       notify(a.id, { category: 'security', title: 'Wallet revoked', body: 'All QR codes issued before now are no longer valid.' });
       return { ok: true };
+    case 'POST /me/password':
+      if (body?.currentPassword !== a.password) fail(422, 'wrong_password', 'The current password is incorrect.');
+      assertPassword(String(body?.newPassword ?? ''));
+      a.password = String(body!.newPassword);
+      notify(a.id, { category: 'security', title: 'Password changed', body: 'Your password was changed. If this wasn’t you, reset it now.' });
+      return { ok: true };
+    case 'POST /me/pin':
+      if (a.pin) requirePin(a, body?.currentPin);
+      assertPin(String(body?.newPin ?? ''));
+      a.pin = String(body!.newPin);
+      notify(a.id, { category: 'security', title: 'Digital ID PIN changed', body: 'Your digital ID PIN was changed.' });
+      return { ok: true };
+    case 'GET /me/preferences':
+      return prefsOf(a.id);
+    case 'PUT /me/preferences': {
+      const owned = new Set([...credentials.values()].filter((c) => c.personId === a.personId).map((c) => c.id));
+      if ((body?.favouriteCards as string[] | undefined)?.some((c) => !owned.has(c))) fail(400, 'unknown_card', 'Unknown document.');
+      const next = mergePreferences(prefsOf(a.id), body ?? {});
+      preferences.set(a.id, next);
+      return next;
+    }
+    case 'GET /me/cards':
+      return [...cards.values()].filter((c) => c.accountId === a.id);
+    case 'DELETE /me/cards/:id': {
+      const c = cards.get(id!);
+      if (!c || c.accountId !== a.id) fail(404, 'not_found', 'Card not found');
+      cards.delete(id!);
+      return { ok: true };
+    }
+    case 'GET /me/signature':
+      return { path: a.savedSignature ?? null };
+    case 'PUT /me/signature':
+      if (body?.path != null && !/^[MLQCZ0-9 .,-]*$/i.test(String(body.path))) fail(400, 'validation_error', 'Invalid signature.');
+      a.savedSignature = body?.path ?? undefined;
+      return { path: a.savedSignature ?? null };
     case 'POST /demo/camera-event':
       return simulateCameraTicket(a);
 
@@ -350,29 +607,28 @@ export async function demoRequest(method: string, path: string, body: Body, toke
       const view = credentialView(c!);
       if (view.status !== 'valid') fail(409, 'credential_not_valid', `Credential is ${view.status}`);
       const disclosure: Disclosure = body?.disclosure ?? 'full';
-      const now = Math.floor(Date.now() / 1000);
-      const payload = base64url(JSON.stringify({ cid: c!.id, ctype: c!.type, disclosure, claims: claims(c!, disclosure), iat: now, exp: now + PRESENTATION_TTL }));
+      const t = Math.floor(Date.now() / 1000);
+      const payload = base64url(JSON.stringify({ cid: c!.id, ctype: c!.type, disclosure, claims: claims(c!, disclosure), iat: t, exp: t + PRESENTATION_TTL }));
       return { token: `demo.${payload}.${seal(payload)}`, expiresInSeconds: PRESENTATION_TTL };
     }
 
     case 'GET /vehicles':
       return [...vehicles.values()].filter((v) => v.ownerPersonId === a.personId);
     case 'GET /vehicles/:id': {
-      const v = vehicles.get(id!);
-      if (!v || v.ownerPersonId !== a.personId) fail(404, 'not_found', 'Vehicle not found');
-      return { ...v, fines: finesOf(a.personId).filter((f) => f.vehicleId === id).map(fineView) };
+      const v = ownVehicle(id!);
+      return { ...v, fines: finesOf(a.personId).filter((f) => f.vehicleId === v.id).map(fineView) };
     }
     case 'POST /vehicles/:id/renew': {
-      const v = vehicles.get(id!);
-      if (!v || v.ownerPersonId !== a.personId) fail(404, 'not_found', 'Vehicle not found');
+      const v = ownVehicle(id!);
       const overdue = finesOf(a.personId).map(fineView).filter((f) => f.status === 'overdue');
       if (overdue.length) fail(409, 'unpaid_fines', `Pay ${overdue.length} overdue fine(s) before renewing.`);
+      if (new Date(v.insurance.expiresOn) < now) fail(409, 'no_insurance', 'Valid insurance is required to renew.');
       const years = body?.years === 2 ? 2 : 1;
-      const base = new Date(Math.max(Date.now(), new Date(v!.plateValidationExpires).getTime()));
+      const base = new Date(Math.max(Date.now(), new Date(v.plateValidationExpires).getTime()));
       base.setUTCFullYear(base.getUTCFullYear() + years);
-      v!.plateValidationExpires = base.toISOString().slice(0, 10);
-      for (const c of credentials.values()) if (c.vehicleId === v!.id) c.expiresOn = v!.plateValidationExpires;
-      notify(a.id, { category: 'renewal', title: 'Plate renewed', body: `${v!.plate} is now valid until ${v!.plateValidationExpires}.`, link: `/vehicle/${v!.id}` });
+      v.plateValidationExpires = base.toISOString().slice(0, 10);
+      for (const c of credentials.values()) if (c.vehicleId === v.id) c.expiresOn = v.plateValidationExpires;
+      notify(a.id, { category: 'renewal', title: 'Plate renewed', body: `${v.plate} is now valid until ${v.plateValidationExpires}.`, link: `/vehicle/${v.id}` });
       return { vehicle: v, fee: 0 };
     }
 
@@ -383,13 +639,23 @@ export async function demoRequest(method: string, path: string, body: Body, toke
       if (!f || f.personId !== a.personId) fail(404, 'not_found', 'Fine not found');
       return { ...fineView(f!), vehicle: f!.vehicleId ? vehicles.get(f!.vehicleId) : undefined, payment: f!.paymentId ? payments.get(f!.paymentId) : undefined };
     }
+    case 'POST /fines/pay-all': {
+      const open = finesOf(a.personId).filter((f) => ['outstanding', 'overdue'].includes(status(f)));
+      if (!open.length) fail(409, 'nothing_to_pay', 'No open tickets.');
+      const p = takePayment(a, 'fine', open.map((f) => f.id).join(','), open.reduce((s, f) => s + f.total, 0), `${open.length} tickets`, body);
+      for (const f of open) {
+        f.status = 'paid';
+        f.paymentId = p.id;
+      }
+      notify(a.id, { category: 'fine', title: 'Payment received', body: `Receipt ${p.receiptNumber}: $${p.amount.toFixed(2)} for ${open.length} tickets.`, link: '/fines' });
+      return { fines: open.map(fineView), payment: p };
+    }
     case 'POST /fines/:id/pay': {
       const f = fines.get(id!);
       if (!f || f.personId !== a.personId) fail(404, 'not_found', 'Fine not found');
       const st = status(f!);
       if (st !== 'outstanding' && st !== 'overdue') fail(409, 'not_payable', `Fine is ${st}`);
-      const p = charge(a.id, 'fine', f!.id, f!.total, body?.method ?? 'card', String(body?.paymentToken ?? ''));
-      if (p.status !== 'succeeded') fail(402, 'payment_declined', 'Payment was declined');
+      const p = takePayment(a, 'fine', f!.id, f!.total, `Ticket ${f!.externalId}`, body);
       f!.status = 'paid';
       f!.paymentId = p.id;
       notify(a.id, { category: 'fine', title: 'Payment received', body: `Receipt ${p.receiptNumber}: $${p.amount.toFixed(2)} for ticket ${f!.externalId}.`, link: `/fine/${f!.id}` });
@@ -402,37 +668,91 @@ export async function demoRequest(method: string, path: string, body: Body, toke
       if (st !== 'outstanding') fail(409, 'not_disputable', st === 'overdue' ? 'The response period has ended' : `Fine is ${st}`);
       if (String(body?.reason ?? '').trim().length < 10) fail(400, 'validation_error', 'Please give a reason of at least 10 characters.');
       f!.status = 'disputed';
-      f!.dispute = { option: body!.option, reason: body!.reason, submittedAt: new Date().toISOString(), reference: ref('DSP') };
+      f!.dispute = { option: body!.option, reason: body!.reason, submittedAt: now.toISOString(), reference: ref('DSP') };
       notify(a.id, { category: 'fine', title: body!.option === 'trial' ? 'Trial requested' : 'Early resolution meeting requested', body: `Reference ${f!.dispute.reference}. The court office will notify you here with your date.`, link: `/fine/${f!.id}` });
       return fineView(f!);
     }
 
     case 'POST /services/:id/requests': {
-      const svc = SERVICES.find((s) => s.id === id);
-      if (!svc) return fail(404, 'not_found', 'Service not found');
+      const svc = serviceById(id!);
+      if (!svc || svc.link) return fail(404, 'not_found', 'Service not found');
       const data: Record<string, string> = body?.data ?? {};
-      const missing = svc.fields.filter((f) => f.required && !data[f.key]?.trim()).map((f) => f.key);
-      if (missing.length) fail(400, 'missing_fields', `Missing: ${missing.join(', ')}`);
-      let paymentId: string | undefined;
-      if (svc.fee > 0) {
-        if (!body?.method || !body?.paymentToken) fail(400, 'payment_required', 'Payment details required');
-        const p = charge(a.id, 'service_fee', svc.id, svc.fee, body!.method, body!.paymentToken);
-        if (p.status !== 'succeeded') fail(402, 'payment_declined', 'Payment was declined');
-        paymentId = p.id;
-      }
-      if (svc.id === 'change-address') {
-        person.address = { ...person.address, line1: data.line1!, line2: undefined, city: data.city!, postalCode: data.postalCode!.toUpperCase() };
-      }
-      const r = { id: newId('req'), accountId: a.id, serviceId: svc.id, data, status: svc.id === 'change-address' ? ('completed' as const) : ('submitted' as const), reference: ref('SR'), createdAt: new Date().toISOString(), paymentId };
+      validateServiceData(svc, data);
+      const paymentId = svc.fee > 0 && body?.method && body?.paymentToken ? takePayment(a, 'service_fee', svc.id, svc.fee, svc.name.en, body).id : undefined;
+      const r = createRequest({ id: newId('req'), reference: ref('SR'), accountId: a.id, service: svc, data, paymentId, now });
       requests.set(r.id, r);
-      notify(a.id, { category: 'service', title: `${svc.name.en}: ${r.status}`, body: `Reference ${r.reference}.` });
+      if (r.status === 'completed') completeRequest(a, r);
+      notifyRequest(a, r);
       return r;
     }
     case 'GET /service-requests':
-      return [...requests.values()].filter((r) => r.accountId === a.id).sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+      return requestsOf(a.id);
+    case 'GET /service-requests/:id': {
+      const r = ownRequest();
+      return { ...r, payment: r.paymentId ? payments.get(r.paymentId) : undefined };
+    }
+    case 'POST /service-requests/:id/pay': {
+      const r = ownRequest();
+      if (r.status !== 'awaiting_payment') fail(409, 'not_payable', `Request is ${r.status}`);
+      const p = takePayment(a, 'service_fee', r.id, r.amount, serviceById(r.serviceId)!.name.en, body);
+      const paid = payRequest(r, p.id, now);
+      if (paid.status === 'completed') completeRequest(a, paid);
+      notifyRequest(a, paid);
+      return { request: paid, payment: p };
+    }
+    case 'POST /service-requests/:id/cancel': {
+      const r = cancelRequest(ownRequest(), now);
+      if (r.serviceId === 'personalized-plates' && r.data.plate) reservedPlates.delete(r.data.plate.replace(/ /g, ''));
+      return r;
+    }
+    case 'POST /service-requests/:id/resubmit': {
+      const r = resubmitRequest(ownRequest(), body?.data ?? {}, now);
+      notifyRequest(a, r);
+      return r;
+    }
+
+    case 'POST /plates/orders': {
+      const v = ownVehicle(String(body?.vehicleId ?? ''));
+      const check = checkPlate(String(body?.plate ?? ''), reservedPlates);
+      if (!check.available) fail(409, 'plate_unavailable', check.reason!.en);
+      reservedPlates.add(check.plate.replace(/ /g, ''));
+      const r = createRequest({ id: newId('req'), reference: ref('SR'), accountId: a.id, service: serviceById('personalized-plates')!, data: { plate: check.plate, vehicle: v.plate }, amount: check.fee, now });
+      requests.set(r.id, r);
+      notifyRequest(a, r);
+      return r;
+    }
+
+    case 'GET /appointments':
+      return appointmentsOf(a.id).map((x) => appointmentView(x, now));
+    case 'POST /appointments': {
+      const apt = bookAppointment({ id: newId('apt'), reference: ref('APT'), accountId: a.id, locationId: String(body?.locationId), serviceId: String(body?.serviceId), startsAt: String(body?.startsAt), acknowledged: !!body?.acknowledged, existing: [...appointments.values()], now });
+      appointments.set(apt.id, apt);
+      const loc = LOCATIONS.find((l) => l.id === apt.locationId)!;
+      notify(a.id, { category: 'service', title: 'Appointment booked', body: `${visitName(apt.serviceId).en} at ${loc.name.en}, ${apt.date} ${apt.time}. Reference ${apt.reference}.`, link: `/appointments/${apt.id}` });
+      return apt;
+    }
+    case 'GET /appointments/:id':
+      return appointmentView(ownAppointment(), now);
+    case 'POST /appointments/:id/cancel':
+      return cancelAppointment(ownAppointment());
+    case 'POST /appointments/:id/check-in':
+      return checkIn(ownAppointment(), now);
+
+    case 'GET /consents':
+      return consentsOf(a.id).map((c) => consentView(c, now));
+    case 'POST /consents/:id/decision': {
+      const c = consents.get(id!);
+      if (!c || c.accountId !== a.id) fail(404, 'not_found', 'Consent not found');
+      if (body?.action === 'approve') requirePin(a, body?.pin);
+      decideConsent(c!, body?.action, now);
+      return consentView(c!, now);
+    }
 
     case 'GET /inbox':
       return inboxOf(a.id);
+    case 'POST /inbox/read-all':
+      for (const msg of inboxOf(a.id)) msg.read = true;
+      return { ok: true };
     case 'POST /inbox/:id/read': {
       const msg = inbox.get(id!);
       if (!msg || msg.accountId !== a.id) fail(404, 'not_found', 'Message not found');
@@ -445,13 +765,38 @@ export async function demoRequest(method: string, path: string, body: Body, toke
 
     case 'POST /signatures': {
       if (body?.consent !== true) fail(400, 'validation_error', 'Consent is required to sign.');
+      requirePin(a, body?.pin);
       const documentSha256 = sha256Hex(String(body?.documentContent ?? ''));
-      const s = { id: newId('sig'), accountId: a.id, documentTitle: String(body?.documentTitle), documentSha256, signedAt: new Date().toISOString(), signature: `demo.${documentSha256}.${seal(documentSha256)}` };
+      const s = { id: newId('sig'), accountId: a.id, documentTitle: String(body?.documentTitle), documentSha256, signedAt: now.toISOString(), retainedUntil: new Date(now.getTime() + SIGNED_RETENTION_DAYS * DAY).toISOString(), signature: `demo.${documentSha256}.${seal(documentSha256)}` };
       signatures.set(s.id, s);
       return s;
     }
     case 'GET /signatures':
-      return [...signatures.values()].filter((s) => s.accountId === a.id);
+      return [...signatures.values()].filter((s) => s.accountId === a.id).sort((x, y) => y.signedAt.localeCompare(x.signedAt));
   }
   return fail(404, 'not_found', `No demo route for ${m} ${path}`);
+}
+
+function verify(body: Body) {
+  const parts = String(body?.token ?? '').trim().split('.');
+  if (parts.length !== 3 || parts[0] !== 'demo' || seal(parts[1]!) !== parts[2]) return { valid: false, reason: 'bad_signature' };
+  let payload: any;
+  try {
+    payload = JSON.parse(fromBase64url(parts[1]!));
+  } catch {
+    return { valid: false, reason: 'bad_signature' };
+  }
+  if (payload.exp * 1000 < Date.now()) return { valid: false, reason: 'expired' };
+  const c = credentials.get(payload.cid);
+  if (!c) return { valid: false, reason: 'unknown_credential' };
+  const owner = [...accounts.values()].find((a) => a.personId === c.personId);
+  const wiped = owner ? walletRevokedAt.get(owner.id) : undefined;
+  if (wiped && payload.iat * 1000 <= wiped) return { valid: false, reason: 'revoked' };
+  const view = credentialView(c);
+  if (view.status !== 'valid') return { valid: false, reason: `credential_${view.status}` };
+  if (owner) {
+    const lid = newId('log');
+    accessLog.set(lid, { id: lid, accountId: owner.id, credentialId: c.id, verifier: String(body?.verifier || 'Unidentified verifier'), claims: Object.keys(payload.claims ?? {}), verifiedAt: new Date().toISOString() });
+  }
+  return { valid: true, credentialType: c.type, disclosure: payload.disclosure, claims: payload.claims, issuedAt: payload.iat, expiresAt: payload.exp };
 }

@@ -19,9 +19,45 @@ import {
 import { effectiveStatus, ingestCameraEvent } from './fines.js';
 import { notify } from './notifications.js';
 import { charge } from './payments.js';
-import { SERVICES } from './catalog.js';
+import { ORGANIZATIONS, SERVICES, serviceById } from './catalog.js';
+import {
+  FAQ,
+  LOCATIONS,
+  PlatformError,
+  SIGNED_RETENTION_DAYS,
+  appointmentView,
+  assertPassword,
+  assertPin,
+  availableSlots,
+  bookAppointment,
+  bookableDates,
+  cancelAppointment,
+  cancelRequest,
+  checkIn,
+  checkPlate,
+  consentView,
+  createRequest,
+  dashboardActions,
+  decideConsent,
+  defaultPreferences,
+  driverRecordResult,
+  issueOtp,
+  mergePreferences,
+  payRequest,
+  phoneHint,
+  resubmitRequest,
+  samePhone,
+  sampleConsents,
+  validateFeedback,
+  validateServiceData,
+  vehicleHistoryResult,
+  verifyOtp,
+  visitName,
+  type Preferences,
+  type ServiceRequest,
+} from './shared/platform.js';
 import { Store } from './store.js';
-import type { Account, Credential, Fine, RegistryPerson, Vehicle } from './types.js';
+import type { Account, Credential, Fine, Payment, RegistryPerson, Vehicle } from './types.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -38,7 +74,12 @@ class HttpError extends Error {
 const paymentInput = z.object({
   method: z.enum(['card', 'apple_pay', 'google_pay', 'interac']),
   paymentToken: z.string().min(1),
+  /** Pay with a saved card. */
+  cardId: z.string().optional(),
+  /** Save the card used. Only display details: the card number never reaches this API. */
+  saveCard: z.object({ last4: z.string().regex(/^\d{4}$/), expiry: z.string().max(7), brand: z.enum(['visa', 'mastercard', 'amex', 'card']) }).optional(),
 });
+type PaymentBody = z.infer<typeof paymentInput>;
 
 const cameraEventSchema = z.object({
   eventId: z.string().min(1),
@@ -67,11 +108,12 @@ export interface AppOptions {
 export async function buildApp(opts: AppOptions = {}) {
   const store = opts.store ?? new Store();
   const app = Fastify({ logger: opts.logger ?? false });
-  await app.register(cors, { origin: true, methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'] });
+  await app.register(cors, { origin: true, methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] });
   app.decorate('store', store);
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof HttpError) return reply.status(err.statusCode).send({ error: err.code, message: err.message });
+    if (err instanceof PlatformError) return reply.status(err.status).send({ error: err.code, message: err.message });
     if (err instanceof ZodError) return reply.status(400).send({ error: 'validation_error', issues: err.issues });
     const status = (err as { statusCode?: number }).statusCode ?? 500;
     if (status >= 500) app.log.error(err);
@@ -121,6 +163,93 @@ export async function buildApp(opts: AppOptions = {}) {
 
   function serializeFine(f: Fine) {
     return { ...f, status: effectiveStatus(f) };
+  }
+
+  function ownedRequest(req: FastifyRequest, id: string): ServiceRequest {
+    const r = store.serviceRequests.get(id);
+    if (!r || r.accountId !== me(req).id) throw new HttpError(404, 'not_found', 'Request not found');
+    return r;
+  }
+
+  function ownedAppointment(req: FastifyRequest, id: string) {
+    const a = store.appointments.get(id);
+    if (!a || a.accountId !== me(req).id) throw new HttpError(404, 'not_found', 'Appointment not found');
+    return a;
+  }
+
+  const preferencesOf = (accountId: string): Preferences => store.preferences.get(accountId) ?? defaultPreferences();
+
+  /** Confirms the digital ID PIN for signing and data sharing. */
+  async function requirePin(req: FastifyRequest, pin: string | undefined) {
+    const account = me(req);
+    if (!account.pinHash) throw new HttpError(409, 'pin_not_set', 'Set a digital ID PIN under Account first.');
+    if (!pin || !(await verifyPassword(pin, account.pinHash))) throw new HttpError(422, 'wrong_pin', 'The digital ID PIN is incorrect.');
+  }
+
+  /**
+   * Charges the user. Returns undefined after sending a 402 when `reply` is
+   * given, otherwise throws on decline.
+   */
+  async function takePayment(
+    req: FastifyRequest,
+    what: { purpose: Payment['purpose']; referenceId: string; amount: number; label: string },
+    body: PaymentBody,
+    reply?: FastifyReply,
+  ): Promise<Payment | undefined> {
+    const account = me(req);
+    let cardLast4 = body.saveCard?.last4;
+    if (body.cardId) {
+      const card = store.cards.get(body.cardId);
+      if (!card || card.accountId !== account.id) throw new HttpError(404, 'not_found', 'Card not found');
+      cardLast4 = card.last4;
+    }
+    const payment = await charge(store, { accountId: account.id, ...what, method: body.method, paymentToken: body.paymentToken, cardLast4 });
+    if (payment.status !== 'succeeded') {
+      if (reply) {
+        reply.status(402).send({ error: 'payment_declined', message: 'Payment was declined', payment });
+        return undefined;
+      }
+      throw new HttpError(402, 'payment_declined', 'Payment was declined');
+    }
+    if (body.saveCard && !store.cardsFor(account.id).some((c) => c.last4 === body.saveCard!.last4 && c.expiry === body.saveCard!.expiry)) {
+      const id = newId('card');
+      store.cards.set(id, { id, accountId: account.id, ...body.saveCard, addedAt: new Date().toISOString() });
+    }
+    return payment;
+  }
+
+  /** Side effects of a completed request on the registry and the result shown to the user. */
+  function completeRequest(req: FastifyRequest, r: ServiceRequest) {
+    const account = me(req);
+    const person = personOf(account);
+    if (r.serviceId === 'change-address') {
+      person.address = { ...person.address, line1: r.data.line1!, line2: undefined, city: r.data.city!, postalCode: r.data.postalCode!.toUpperCase() };
+    }
+    if (r.serviceId === 'renew-licence') {
+      const dl = store.credentialsFor(person.id).find((c) => c.type === 'driver_licence');
+      if (dl) {
+        const base = new Date(Math.max(Date.now(), new Date(dl.expiresOn).getTime()));
+        base.setUTCFullYear(base.getUTCFullYear() + 5);
+        dl.expiresOn = base.toISOString().slice(0, 10);
+        dl.issuedOn = new Date().toISOString().slice(0, 10);
+        r.result = { title: { en: 'Licence renewed', fr: 'Permis renouvelé' }, lines: [{ label: { en: 'New expiry date', fr: 'Nouvelle date d’expiration' }, value: dl.expiresOn }] };
+      }
+    }
+    if (r.serviceId === 'driver-record') {
+      const dl = store.credentialsFor(person.id).find((c) => c.type === 'driver_licence');
+      const convictions = store
+        .finesFor(person.id)
+        .filter((f) => f.liability === 'driver' && f.status === 'paid')
+        .map((f) => ({ date: f.occurredAt.slice(0, 10), offence: f.offence, points: f.demeritPoints }));
+      r.result = driverRecordResult({ licenceNumber: person.licenceNumber, licenceClass: dl?.licenceClass, status: dl?.status ?? 'none', expiresOn: dl?.expiresOn ?? '—', convictions, period: r.data.years ?? '3 years' });
+    }
+    if (r.serviceId === 'vehicle-history') r.result = vehicleHistoryResult(r.data.vin ?? '');
+  }
+
+  function notifyRequest(account: Account, r: ServiceRequest) {
+    const name = serviceById(r.serviceId)?.name.en ?? r.serviceId;
+    const status = { in_review: 'in review', action_required: 'action required', awaiting_payment: 'awaiting payment', completed: 'completed', rejected: 'rejected', cancelled: 'cancelled' }[r.status];
+    notify(store, account, { category: 'service', title: `${name}: ${status}`, body: `Request ${r.reference}.`, link: `/requests/${r.id}` });
   }
 
   function credentialView(c: Credential) {
@@ -198,6 +327,15 @@ export async function buildApp(opts: AppOptions = {}) {
       overdueFines: open.filter((f) => f.status === 'overdue').length,
       unreadMessages: store.inboxFor(account.id).filter((m) => !m.read).length,
       renewalsDue: renewals,
+      actions: dashboardActions({
+        now: new Date(),
+        credentials: store.credentialsFor(account.personId).filter((c) => c.type !== 'vehicle_permit'),
+        vehicles: store.vehiclesFor(account.personId),
+        overdueTickets: open.filter((f) => f.status === 'overdue').length,
+        requests: store.requestsFor(account.id),
+        consents: store.consentsFor(account.id),
+        appointments: store.appointmentsFor(account.id),
+      }),
     };
   }
 
@@ -218,8 +356,20 @@ export async function buildApp(opts: AppOptions = {}) {
         /** Session id from the identity-verification SDK (document scan + liveness selfie). */
         idvSessionId: z.string().startsWith('idv_'),
         language: z.enum(['en', 'fr']).default('en'),
+        /** Digital ID PIN, used to confirm signing and data sharing. */
+        pin: z.string().optional(),
+        /** One-time code sent to `phone` by POST /v1/auth/otp. */
+        otpId: z.string().optional(),
+        otpCode: z.string().optional(),
       })
       .parse(req.body);
+    assertPassword(body.password);
+    if (body.pin) assertPin(body.pin);
+    if (body.otpId) {
+      const otp = store.otps.get(body.otpId);
+      verifyOtp(otp, body.otpCode ?? '', new Date());
+      if (!body.phone || !samePhone(body.phone, otp!.target)) throw new HttpError(422, 'otp_invalid', 'The code was sent to a different number.');
+    }
 
     const person = store.findPersonByLicence(body.licenceNumber);
     // Same error for "no such licence" and "DOB mismatch" to avoid record enumeration.
@@ -239,8 +389,10 @@ export async function buildApp(opts: AppOptions = {}) {
       createdAt: new Date().toISOString(),
       identityAssurance: 'IAL2',
       pushTokens: [],
+      ...(body.pin ? { pinHash: await hashPassword(body.pin) } : {}),
     };
     store.accounts.set(account.id, account);
+    for (const c of sampleConsents(account.id, new Date(), newId).filter((c) => c.status === 'pending')) store.consents.set(c.id, c);
 
     // Tickets issued before sign-up are already on the person's record.
     const pending = store.finesFor(person.id).filter((f) => f.status === 'outstanding');
@@ -255,15 +407,111 @@ export async function buildApp(opts: AppOptions = {}) {
   });
 
   app.post('/v1/auth/login', async (req) => {
+    // Sign in with an email or a licence number (Sanad signs in with the national ID).
     const body = z.object({ email: z.string(), password: z.string() }).parse(req.body);
-    const account = store.findAccountByEmail(body.email);
+    const account = findAccount(body.email);
     if (!account || !(await verifyPassword(body.password, account.passwordHash))) {
-      throw new HttpError(401, 'invalid_credentials', 'Email or password is incorrect.');
+      throw new HttpError(401, 'invalid_credentials', 'Email, licence number or password is incorrect.');
     }
     return { accessToken: await issueAccessToken(account.id) };
   });
 
+  function findAccount(identifier: string): Account | undefined {
+    if (identifier.includes('@')) return store.findAccountByEmail(identifier);
+    const person = store.findPersonByLicence(identifier);
+    return person ? store.findAccountByPerson(person.id) : undefined;
+  }
+
+  const otpCode = () => String(100000 + Math.floor(Math.random() * 900000));
+  /** Sends a code by SMS. No gateway is wired: outside production the code is returned so it can be typed in. */
+  function sendOtp(target: string) {
+    const otp = issueOtp(newId('otp'), target, otpCode(), new Date());
+    store.otps.set(otp.id, otp);
+    return { otpId: otp.id, ...(config.exposeDevCodes ? { devCode: otp.code } : {}) };
+  }
+
+  app.post('/v1/auth/otp', async (req) => {
+    const { phone } = z.object({ phone: z.string().regex(/^[+\d][\d\s().-]{6,20}$/) }).parse(req.body);
+    return sendOtp(phone);
+  });
+
+  // --- forgot password: identifier -> confirm phone -> code -> new password ---
+  app.post('/v1/auth/password-reset/start', async (req) => {
+    const { identifier } = z.object({ identifier: z.string().min(3) }).parse(req.body);
+    const account = findAccount(identifier);
+    // Unknown identifiers get a reset id too, so the response doesn't reveal who has an account.
+    const reset = { id: newId('rst'), accountId: account?.id, verified: false, expiresAt: Date.now() + 15 * 60_000 };
+    store.passwordResets.set(reset.id, reset);
+    return { resetId: reset.id, phoneHint: phoneHint(account?.phone) };
+  });
+  function activeReset(id: string) {
+    const r = store.passwordResets.get(id);
+    if (!r || r.expiresAt < Date.now()) throw new HttpError(410, 'reset_expired', 'Start again.');
+    return r;
+  }
+  app.post<{ Params: { id: string } }>('/v1/auth/password-reset/:id/phone', async (req) => {
+    const { phone } = z.object({ phone: z.string().min(7) }).parse(req.body);
+    const r = activeReset(req.params.id);
+    const account = r.accountId ? store.accounts.get(r.accountId) : undefined;
+    if (!account || !samePhone(phone, account.phone)) throw new HttpError(422, 'phone_mismatch', 'That number doesn’t match the one on the account.');
+    const sent = sendOtp(account.phone!);
+    r.otpId = sent.otpId;
+    return { sent: true, ...('devCode' in sent ? { devCode: sent.devCode } : {}) };
+  });
+  app.post<{ Params: { id: string } }>('/v1/auth/password-reset/:id/verify', async (req) => {
+    const { code } = z.object({ code: z.string() }).parse(req.body);
+    const r = activeReset(req.params.id);
+    verifyOtp(r.otpId ? store.otps.get(r.otpId) : undefined, code, new Date());
+    r.verified = true;
+    return { ok: true };
+  });
+  app.post<{ Params: { id: string } }>('/v1/auth/password-reset/:id/complete', async (req) => {
+    const { password } = z.object({ password: z.string() }).parse(req.body);
+    const r = activeReset(req.params.id);
+    if (!r.verified || !r.accountId) throw new HttpError(409, 'not_verified', 'Verify the code first.');
+    assertPassword(password);
+    const account = store.accounts.get(r.accountId)!;
+    account.passwordHash = await hashPassword(password);
+    store.passwordResets.delete(r.id);
+    notify(store, account, { category: 'security', title: 'Password reset', body: 'Your password was reset with a code sent to your phone.' });
+    return { ok: true };
+  });
+
   app.get('/v1/services', async () => SERVICES);
+  app.get('/v1/directory', async () => ({ organizations: ORGANIZATIONS, services: SERVICES.filter((s) => !s.hidden) }));
+  app.get('/v1/locations', async () => LOCATIONS);
+  app.get<{ Params: { id: string }; Querystring: { date?: string } }>('/v1/locations/:id/slots', async (req) => {
+    const now = new Date();
+    const dates = bookableDates(now);
+    const date = req.query.date && dates.includes(req.query.date) ? req.query.date : dates[0]!;
+    const booked = new Set([...store.appointments.values()].filter((a) => a.status !== 'cancelled').map((a) => `${a.locationId}|${a.startsAt}`));
+    return { dates, date, slots: availableSlots(req.params.id, date, booked, now) };
+  });
+  app.get('/v1/faq', async () => FAQ);
+  app.post('/v1/plates/check', async (req) => {
+    const { plate } = z.object({ plate: z.string().max(16) }).parse(req.body);
+    return checkPlate(plate, store.reservedPlates);
+  });
+
+  /** Suggestions, complaints, ratings and new-service ideas. Works signed in or as a guest. */
+  app.post('/v1/feedback', async (req, reply) => {
+    const body = z
+      .object({
+        kind: z.enum(['suggestion', 'complaint', 'rating', 'new_service']),
+        topic: z.string().max(40).optional(),
+        message: z.string().max(1000).optional(),
+        rating: z.number().int().min(1).max(5).optional(),
+        improvements: z.array(z.string().max(40)).max(10).optional(),
+      })
+      .parse(req.body);
+    validateFeedback(body);
+    let accountId: string | undefined;
+    const header = req.headers.authorization;
+    if (header?.startsWith('Bearer ')) accountId = await verifyAccessToken(header.slice(7)).catch(() => undefined);
+    const item = { ...body, id: newId('fb'), accountId, reference: referenceNumber('FB'), createdAt: new Date().toISOString() };
+    store.feedback.push(item);
+    return reply.status(201).send({ reference: item.reference });
+  });
 
   /**
    * Verifier endpoint (police, retailer, bank, landlord). Checks the issuer
@@ -336,9 +584,10 @@ export async function buildApp(opts: AppOptions = {}) {
       const account = me(req);
       const person = personOf(account);
       return {
-        account: { id: account.id, email: account.email, phone: account.phone, language: account.language, identityAssurance: account.identityAssurance, createdAt: account.createdAt },
+        account: { id: account.id, email: account.email, phone: account.phone, language: account.language, identityAssurance: account.identityAssurance, createdAt: account.createdAt, pinSet: !!account.pinHash },
         person,
         summary: summary(account),
+        preferences: preferencesOf(account.id),
       };
     });
 
@@ -413,9 +662,8 @@ export async function buildApp(opts: AppOptions = {}) {
       let paymentId: string | undefined;
       if (fee > 0) {
         if (!body.method || !body.paymentToken) throw new HttpError(400, 'payment_required', 'Payment details required');
-        const payment = await charge(store, { accountId: me(req).id, purpose: 'plate_renewal', referenceId: v.id, amount: fee, method: body.method, paymentToken: body.paymentToken });
-        if (payment.status !== 'succeeded') throw new HttpError(402, 'payment_declined', 'Payment was declined');
-        paymentId = payment.id;
+        const payment = await takePayment(req, { purpose: 'plate_renewal', referenceId: v.id, amount: fee, label: `Plate renewal ${v.plate}` }, { ...body, method: body.method, paymentToken: body.paymentToken });
+        paymentId = payment!.id;
       }
       const base = new Date(Math.max(Date.now(), new Date(v.plateValidationExpires).getTime()));
       base.setUTCFullYear(base.getUTCFullYear() + body.years);
@@ -438,12 +686,28 @@ export async function buildApp(opts: AppOptions = {}) {
       const body = paymentInput.parse(req.body);
       const status = effectiveStatus(f);
       if (status !== 'outstanding' && status !== 'overdue') throw new HttpError(409, 'not_payable', `Fine is ${status}`);
-      const payment = await charge(store, { accountId: me(req).id, purpose: 'fine', referenceId: f.id, amount: f.total, method: body.method, paymentToken: body.paymentToken });
-      if (payment.status !== 'succeeded') return reply.status(402).send({ error: 'payment_declined', payment });
+      const payment = await takePayment(req, { purpose: 'fine', referenceId: f.id, amount: f.total, label: `Ticket ${f.externalId}` }, body, reply);
+      if (!payment) return reply;
       f.status = 'paid';
       f.paymentId = payment.id;
       notify(store, me(req), { category: 'fine', title: 'Payment received', body: `Receipt ${payment.receiptNumber}: $${payment.amount.toFixed(2)} for ticket ${f.externalId}.`, link: `/fine/${f.id}` });
       return { fine: serializeFine(f), payment };
+    });
+
+    /** Sanad's "Pay all": every open ticket in one payment. */
+    secure.post('/v1/fines/pay-all', async (req, reply) => {
+      const body = paymentInput.parse(req.body);
+      const open = store.finesFor(me(req).personId).filter((f) => ['outstanding', 'overdue'].includes(effectiveStatus(f)));
+      if (!open.length) throw new HttpError(409, 'nothing_to_pay', 'No open tickets.');
+      const amount = open.reduce((s, f) => s + f.total, 0);
+      const payment = await takePayment(req, { purpose: 'fine', referenceId: open.map((f) => f.id).join(','), amount, label: `${open.length} tickets` }, body, reply);
+      if (!payment) return reply;
+      for (const f of open) {
+        f.status = 'paid';
+        f.paymentId = payment.id;
+      }
+      notify(store, me(req), { category: 'fine', title: 'Payment received', body: `Receipt ${payment.receiptNumber}: $${payment.amount.toFixed(2)} for ${open.length} tickets.`, link: '/fines' });
+      return { fines: open.map(serializeFine), payment };
     });
 
     secure.post<{ Params: { id: string } }>('/v1/fines/:id/dispute', async (req) => {
@@ -462,49 +726,102 @@ export async function buildApp(opts: AppOptions = {}) {
       return serializeFine(f);
     });
 
-    // --- services ----------------------------------------------------------
+    // --- services and requests ("My requests") -----------------------------
     secure.post<{ Params: { id: string } }>('/v1/services/:id/requests', async (req, reply) => {
-      const service = SERVICES.find((s) => s.id === req.params.id);
-      if (!service) throw new HttpError(404, 'not_found', 'Service not found');
+      const service = serviceById(req.params.id);
+      if (!service || service.link) throw new HttpError(404, 'not_found', 'Service not found');
       const body = z.object({ data: z.record(z.string(), z.string()) }).and(paymentInput.partial()).parse(req.body);
-      const missing = service.fields.filter((f) => f.required && !body.data[f.key]?.trim()).map((f) => f.key);
-      if (missing.length) throw new HttpError(400, 'missing_fields', `Missing: ${missing.join(', ')}`);
+      validateServiceData(service, body.data);
 
+      // Paying up front is optional: without payment details a fee-bearing
+      // request waits in "awaiting payment" (Sanad's flow).
       let paymentId: string | undefined;
-      if (service.fee > 0) {
-        if (!body.method || !body.paymentToken) throw new HttpError(400, 'payment_required', 'Payment details required');
-        const payment = await charge(store, { accountId: me(req).id, purpose: 'service_fee', referenceId: service.id, amount: service.fee, method: body.method, paymentToken: body.paymentToken });
-        if (payment.status !== 'succeeded') throw new HttpError(402, 'payment_declined', 'Payment was declined');
-        paymentId = payment.id;
+      if (service.fee > 0 && body.method && body.paymentToken) {
+        const payment = await takePayment(req, { purpose: 'service_fee', referenceId: service.id, amount: service.fee, label: service.name.en }, body as PaymentBody);
+        paymentId = payment!.id;
       }
-
-      // Address change propagates to every linked document in one step.
-      if (service.id === 'change-address') {
-        const person = personOf(me(req));
-        person.address = { ...person.address, line1: body.data.line1!, line2: undefined, city: body.data.city!, postalCode: body.data.postalCode!.toUpperCase() };
-      }
-
-      const request = {
-        id: newId('req'),
-        accountId: me(req).id,
-        serviceId: service.id,
-        data: body.data,
-        status: service.id === 'change-address' ? ('completed' as const) : ('submitted' as const),
-        reference: referenceNumber('SR'),
-        createdAt: new Date().toISOString(),
-        paymentId,
-      };
+      const request = createRequest({ id: newId('req'), reference: referenceNumber('SR'), accountId: me(req).id, service, data: body.data, paymentId, now: new Date() });
       store.serviceRequests.set(request.id, request);
-      notify(store, me(req), { category: 'service', title: `${service.name.en}: ${request.status}`, body: `Reference ${request.reference}.` });
+      if (request.status === 'completed') completeRequest(req, request);
+      notifyRequest(me(req), request);
       return reply.status(201).send(request);
     });
 
-    secure.get('/v1/service-requests', async (req) =>
-      [...store.serviceRequests.values()].filter((r) => r.accountId === me(req).id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    );
+    secure.get('/v1/service-requests', async (req) => store.requestsFor(me(req).id));
+    secure.get<{ Params: { id: string } }>('/v1/service-requests/:id', async (req) => {
+      const r = ownedRequest(req, req.params.id);
+      return { ...r, payment: r.paymentId ? store.payments.get(r.paymentId) : undefined };
+    });
+    secure.post<{ Params: { id: string } }>('/v1/service-requests/:id/pay', async (req, reply) => {
+      const r = ownedRequest(req, req.params.id);
+      if (r.status !== 'awaiting_payment') throw new HttpError(409, 'not_payable', `Request is ${r.status}`);
+      const body = paymentInput.parse(req.body);
+      const service = serviceById(r.serviceId)!;
+      const payment = await takePayment(req, { purpose: 'service_fee', referenceId: r.id, amount: r.amount, label: service.name.en }, body, reply);
+      if (!payment) return reply;
+      const paid = payRequest(r, payment.id, new Date());
+      if (paid.status === 'completed') completeRequest(req, paid);
+      notifyRequest(me(req), paid);
+      return { request: paid, payment };
+    });
+    secure.post<{ Params: { id: string } }>('/v1/service-requests/:id/cancel', async (req) => {
+      const r = cancelRequest(ownedRequest(req, req.params.id), new Date());
+      if (r.serviceId === 'personalized-plates' && r.data.plate) store.reservedPlates.delete(r.data.plate.replace(/ /g, ''));
+      return r;
+    });
+    secure.post<{ Params: { id: string } }>('/v1/service-requests/:id/resubmit', async (req) => {
+      const body = z.object({ data: z.record(z.string(), z.string()) }).parse(req.body);
+      const r = resubmitRequest(ownedRequest(req, req.params.id), body.data, new Date());
+      notifyRequest(me(req), r);
+      return r;
+    });
+
+    // --- personalized plates -----------------------------------------------
+    secure.post('/v1/plates/orders', async (req, reply) => {
+      const body = z.object({ plate: z.string().min(2).max(12), vehicleId: z.string() }).parse(req.body);
+      const vehicle = ownedVehicle(req, body.vehicleId);
+      const check = checkPlate(body.plate, store.reservedPlates);
+      if (!check.available) throw new HttpError(409, 'plate_unavailable', check.reason!.en);
+      store.reservedPlates.add(check.plate.replace(/ /g, ''));
+      const service = serviceById('personalized-plates')!;
+      const request = createRequest({ id: newId('req'), reference: referenceNumber('SR'), accountId: me(req).id, service, data: { plate: check.plate, vehicle: vehicle.plate }, amount: check.fee, now: new Date() });
+      store.serviceRequests.set(request.id, request);
+      notifyRequest(me(req), request);
+      return reply.status(201).send(request);
+    });
+
+    // --- appointments ------------------------------------------------------
+    secure.get('/v1/appointments', async (req) => store.appointmentsFor(me(req).id).map((a) => appointmentView(a, new Date())));
+    secure.post('/v1/appointments', async (req, reply) => {
+      const body = z.object({ locationId: z.string(), serviceId: z.string(), startsAt: z.iso.datetime(), acknowledged: z.boolean() }).parse(req.body);
+      const appointment = bookAppointment({ ...body, id: newId('apt'), reference: referenceNumber('APT'), accountId: me(req).id, existing: [...store.appointments.values()], now: new Date() });
+      store.appointments.set(appointment.id, appointment);
+      const loc = LOCATIONS.find((l) => l.id === appointment.locationId)!;
+      notify(store, me(req), { category: 'service', title: 'Appointment booked', body: `${visitName(appointment.serviceId).en} at ${loc.name.en}, ${appointment.date} ${appointment.time}. Reference ${appointment.reference}.`, link: `/appointments/${appointment.id}` });
+      return reply.status(201).send(appointment);
+    });
+    secure.get<{ Params: { id: string } }>('/v1/appointments/:id', async (req) => appointmentView(ownedAppointment(req, req.params.id), new Date()));
+    secure.post<{ Params: { id: string } }>('/v1/appointments/:id/cancel', async (req) => cancelAppointment(ownedAppointment(req, req.params.id)));
+    secure.post<{ Params: { id: string } }>('/v1/appointments/:id/check-in', async (req) => checkIn(ownedAppointment(req, req.params.id), new Date()));
+
+    // --- consents (third-party data requests) ------------------------------
+    secure.get('/v1/consents', async (req) => store.consentsFor(me(req).id).map((c) => consentView(c, new Date())));
+    secure.post<{ Params: { id: string } }>('/v1/consents/:id/decision', async (req) => {
+      const body = z.object({ action: z.enum(['approve', 'reject', 'revoke']), pin: z.string().optional() }).parse(req.body);
+      const c = store.consents.get(req.params.id);
+      if (!c || c.accountId !== me(req).id) throw new HttpError(404, 'not_found', 'Consent not found');
+      // Sharing data is confirmed with the digital ID PIN; saying no never is.
+      if (body.action === 'approve') await requirePin(req, body.pin);
+      decideConsent(c, body.action, new Date());
+      return consentView(c, new Date());
+    });
 
     // --- inbox -------------------------------------------------------------
     secure.get('/v1/inbox', async (req) => store.inboxFor(me(req).id));
+    secure.post('/v1/inbox/read-all', async (req) => {
+      for (const m of store.inboxFor(me(req).id)) m.read = true;
+      return { ok: true };
+    });
     secure.post<{ Params: { id: string } }>('/v1/inbox/:id/read', async (req) => {
       const m = store.inbox.get(req.params.id);
       if (!m || m.accountId !== me(req).id) throw new HttpError(404, 'not_found', 'Message not found');
@@ -512,26 +829,77 @@ export async function buildApp(opts: AppOptions = {}) {
       return m;
     });
 
-    // --- payments ----------------------------------------------------------
+    // --- payments and saved cards ------------------------------------------
     secure.get('/v1/payments', async (req) => store.paymentsFor(me(req).id));
+    secure.get('/v1/me/cards', async (req) => store.cardsFor(me(req).id));
+    secure.delete<{ Params: { id: string } }>('/v1/me/cards/:id', async (req) => {
+      const card = store.cards.get(req.params.id);
+      if (!card || card.accountId !== me(req).id) throw new HttpError(404, 'not_found', 'Card not found');
+      store.cards.delete(card.id);
+      return { ok: true };
+    });
 
     // --- digital signature -------------------------------------------------
     secure.post('/v1/signatures', async (req, reply) => {
-      const body = z.object({ documentTitle: z.string().min(1), documentContent: z.string().min(1), consent: z.literal(true) }).parse(req.body);
+      const body = z.object({ documentTitle: z.string().min(1), documentContent: z.string().min(1), consent: z.literal(true), pin: z.string().optional() }).parse(req.body);
+      await requirePin(req, body.pin);
       const account = me(req);
       const documentSha256 = sha256Hex(body.documentContent);
+      const signedAt = new Date();
       const record = {
         id: newId('sig'),
         accountId: account.id,
         documentTitle: body.documentTitle,
         documentSha256,
-        signedAt: new Date().toISOString(),
+        signedAt: signedAt.toISOString(),
+        retainedUntil: new Date(signedAt.getTime() + SIGNED_RETENTION_DAYS * 86400_000).toISOString(),
         signature: await signDocumentHash(account.id, documentSha256),
       };
       store.signatures.set(record.id, record);
       return reply.status(201).send(record);
     });
-    secure.get('/v1/signatures', async (req) => [...store.signatures.values()].filter((s) => s.accountId === me(req).id));
+    secure.get('/v1/signatures', async (req) => [...store.signatures.values()].filter((s) => s.accountId === me(req).id).sort((a, b) => b.signedAt.localeCompare(a.signedAt)));
+    secure.get('/v1/me/signature', async (req) => ({ path: me(req).savedSignature ?? null }));
+    secure.put('/v1/me/signature', async (req) => {
+      const { path } = z.object({ path: z.string().max(20_000).regex(/^[MLQCZ0-9 .,-]*$/i).nullable() }).parse(req.body);
+      me(req).savedSignature = path ?? undefined;
+      return { path };
+    });
+
+    // --- account security and preferences ----------------------------------
+    secure.post('/v1/me/password', async (req) => {
+      const body = z.object({ currentPassword: z.string(), newPassword: z.string() }).parse(req.body);
+      const account = me(req);
+      if (!(await verifyPassword(body.currentPassword, account.passwordHash))) throw new HttpError(422, 'wrong_password', 'The current password is incorrect.');
+      assertPassword(body.newPassword);
+      account.passwordHash = await hashPassword(body.newPassword);
+      notify(store, account, { category: 'security', title: 'Password changed', body: 'Your password was changed. If this wasn’t you, reset it now.' });
+      return { ok: true };
+    });
+    secure.post('/v1/me/pin', async (req) => {
+      const body = z.object({ currentPin: z.string().optional(), newPin: z.string() }).parse(req.body);
+      const account = me(req);
+      if (account.pinHash) await requirePin(req, body.currentPin);
+      assertPin(body.newPin);
+      account.pinHash = await hashPassword(body.newPin);
+      notify(store, account, { category: 'security', title: 'Digital ID PIN changed', body: 'Your digital ID PIN was changed.' });
+      return { ok: true };
+    });
+    secure.get('/v1/me/preferences', async (req) => preferencesOf(me(req).id));
+    secure.put('/v1/me/preferences', async (req) => {
+      const patch = z
+        .object({
+          favouriteCards: z.array(z.string()).optional(),
+          favouriteServices: z.array(z.string()).optional(),
+          notifications: z.object({ renewals: z.boolean(), tickets: z.boolean(), requests: z.boolean() }).partial().optional(),
+        })
+        .parse(req.body);
+      const owned = new Set(store.credentialsFor(me(req).personId).map((c) => c.id));
+      if (patch.favouriteCards?.some((id) => !owned.has(id))) throw new HttpError(400, 'unknown_card', 'Unknown document.');
+      const next = mergePreferences(preferencesOf(me(req).id), patch as Partial<Preferences>);
+      store.preferences.set(me(req).id, next);
+      return next;
+    });
   });
 
   return app;

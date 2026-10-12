@@ -3,7 +3,7 @@ import { decodeJwt } from 'jose';
 import { buildApp } from '../src/app.js';
 import { config } from '../src/config.js';
 import { Store } from '../src/store.js';
-import { seed, DEMO_EMAIL, DEMO_PASSWORD, DEMO_PEOPLE, DEMO_PLATES } from '../src/seed.js';
+import { seed, DEMO_EMAIL, DEMO_PASSWORD, DEMO_PEOPLE, DEMO_PIN, DEMO_PLATES } from '../src/seed.js';
 
 type App = Awaited<ReturnType<typeof buildApp>>;
 
@@ -56,7 +56,7 @@ describe('auth', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email: 'sam@example.com', password: 'longenough', licenceNumber: DEMO_PEOPLE.sam.licenceNumber, dateOfBirth: DEMO_PEOPLE.sam.dateOfBirth, idvSessionId: 'idv_test' },
+      payload: { email: 'sam@example.com', password: 'Longenough1!', licenceNumber: DEMO_PEOPLE.sam.licenceNumber, dateOfBirth: DEMO_PEOPLE.sam.dateOfBirth, idvSessionId: 'idv_test' },
     });
     expect(res.statusCode).toBe(201);
     const headers = { authorization: `Bearer ${res.json().accessToken}` };
@@ -70,7 +70,7 @@ describe('auth', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email: 'x@example.com', password: 'longenough', licenceNumber: DEMO_PEOPLE.sam.licenceNumber, dateOfBirth: '2000-01-01', idvSessionId: 'idv_x' },
+      payload: { email: 'x@example.com', password: 'Longenough1!', licenceNumber: DEMO_PEOPLE.sam.licenceNumber, dateOfBirth: '2000-01-01', idvSessionId: 'idv_x' },
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().error).toBe('identity_not_matched');
@@ -80,7 +80,7 @@ describe('auth', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
-      payload: { email: 'other@example.com', password: 'longenough', licenceNumber: DEMO_PEOPLE.alex.licenceNumber, dateOfBirth: DEMO_PEOPLE.alex.dateOfBirth, idvSessionId: 'idv_y' },
+      payload: { email: 'other@example.com', password: 'Longenough1!', licenceNumber: DEMO_PEOPLE.alex.licenceNumber, dateOfBirth: DEMO_PEOPLE.alex.dateOfBirth, idvSessionId: 'idv_y' },
     });
     expect(res.statusCode).toBe(409);
   });
@@ -241,10 +241,11 @@ describe('services & signatures', () => {
     for (const c of wallet) expect(c.holder.address).toMatchObject({ line1: '1 New Road', city: 'Hamilton', postalCode: 'L8P 4R5' });
   });
 
-  it('charges the service fee', async () => {
+  it('charges the service fee, now or later', async () => {
     const headers = await login();
-    const noPay = await app.inject({ method: 'POST', url: '/v1/services/driver-record/requests', headers, payload: { data: { years: '3 years' } } });
-    expect(noPay.statusCode).toBe(400);
+    const later = await app.inject({ method: 'POST', url: '/v1/services/driver-record/requests', headers, payload: { data: { years: '3 years' } } });
+    expect(later.statusCode).toBe(201);
+    expect(later.json()).toMatchObject({ status: 'awaiting_payment', amount: 12 });
     const ok = await app.inject({ method: 'POST', url: '/v1/services/driver-record/requests', headers, payload: { data: { years: '3 years' }, method: 'card', paymentToken: 'tok_ok' } });
     expect(ok.statusCode).toBe(201);
     expect(ok.json().paymentId).toBeTruthy();
@@ -252,8 +253,10 @@ describe('services & signatures', () => {
 
   it('signs a document hash', async () => {
     const headers = await login();
-    const res = await app.inject({ method: 'POST', url: '/v1/signatures', headers, payload: { documentTitle: 'Bill of sale', documentContent: 'I sell my car', consent: true } });
+    const res = await app.inject({ method: 'POST', url: '/v1/signatures', headers, payload: { documentTitle: 'Bill of sale', documentContent: 'I sell my car', consent: true, pin: DEMO_PIN } });
     expect(res.statusCode).toBe(201);
+    const wrongPin = await app.inject({ method: 'POST', url: '/v1/signatures', headers, payload: { documentTitle: 'Bill of sale', documentContent: 'x', consent: true, pin: '0000' } });
+    expect(wrongPin.statusCode).toBe(422);
     expect(decodeJwt(res.json().signature)).toMatchObject({ doc: res.json().documentSha256, sub: 'acc_alex' });
   });
 });
@@ -278,5 +281,17 @@ describe('cors', () => {
     });
     expect(res.statusCode).toBe(204);
     expect(String(res.headers['access-control-allow-methods'])).toContain('PATCH');
+  });
+
+  it('allows PUT and DELETE from the web build (signature, preferences, saved cards)', async () => {
+    const res = await app.inject({
+      method: 'OPTIONS',
+      url: '/v1/me/signature',
+      headers: { origin: 'http://localhost:8081', 'access-control-request-method': 'PUT' },
+    });
+    expect(res.statusCode).toBe(204);
+    const allowed = String(res.headers['access-control-allow-methods']);
+    expect(allowed).toContain('PUT');
+    expect(allowed).toContain('DELETE');
   });
 });

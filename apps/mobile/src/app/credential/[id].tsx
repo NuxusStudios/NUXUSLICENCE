@@ -1,20 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Share, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
 import { VehiclePermitDocument } from '../../components/VehiclePermitDocument';
 import { FlipCard } from '../../components/FlipCard';
-import { Button, Card, Divider, ErrorState, Loading, Notice, Row, Screen, SectionHeader, Txt } from '../../components/ui';
+import { Widget } from '../../components/kit';
+import { Button, Card, Divider, ErrorState, ListItem, Loading, Notice, Row, Screen, SectionHeader, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { QR_REFRESH_SECONDS } from '../../lib/config';
 import { date } from '../../lib/format';
+import { CATEGORY_ICON, serviceHref } from '../../lib/icons';
+import { MAX_FAVOURITE_CARDS, serviceById } from '../../lib/shared/platform';
 import { useI18n, type TKey } from '../../lib/i18n';
 import { fonts, radius, space, useTheme } from '../../lib/theme';
 import type { Credential, Disclosure } from '../../lib/types';
 import { useAsync } from '../../lib/useAsync';
+
+const RELATED: Record<Credential['type'], string[]> = {
+  driver_licence: ['renew-licence', 'replace-licence', 'driver-record', 'change-address'],
+  photo_card: ['photo-card', 'change-address'],
+  health_card: ['renew-health-card', 'change-address'],
+  vehicle_permit: ['renew-plate', 'replace-permit', 'transfer-vehicle', 'personalized-plates'],
+};
 
 function disclosuresFor(c: Credential): Disclosure[] {
   if (c.type === 'vehicle_permit') return ['full'];
@@ -24,10 +34,12 @@ function disclosuresFor(c: Credential): Disclosure[] {
 
 export default function CredentialScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t, lang } = useI18n();
+  const { t, tr, pick, lang } = useI18n();
   const navigation = useNavigation();
   const { data, error, loading, reload } = useAsync(() => api.credential(id), id);
+  const prefs = useAsync(api.preferences);
   const [sharing, setSharing] = useState(false);
+  const [note, setNote] = useState<string>();
 
   useEffect(() => {
     if (data) navigation.setOptions({ title: t(data.type) });
@@ -37,6 +49,33 @@ export default function CredentialScreen() {
   if (!data && error) return <ErrorState error={error} onRetry={reload} />;
   const cred = data!;
   const h = cred.holder;
+  const favs = prefs.data?.favouriteCards ?? [];
+  const isFavourite = favs.includes(cred.id);
+
+  async function toggleFavourite() {
+    if (!isFavourite && favs.length >= MAX_FAVOURITE_CARDS) return setNote(tr(`Up to ${MAX_FAVOURITE_CARDS} favourites. Remove one first.`, `Jusqu’à ${MAX_FAVOURITE_CARDS} favoris. Retirez-en un d’abord.`));
+    await api.savePreferences({ favouriteCards: isFavourite ? favs.filter((x) => x !== cred.id) : [...favs, cred.id] });
+    setNote(isFavourite ? tr('Removed from favourites.', 'Retiré des favoris.') : tr('Added to favourites.', 'Ajouté aux favoris.'));
+    await prefs.reload();
+  }
+
+  async function copyAll() {
+    const lines = [
+      `${t(cred.type)} — ${cred.documentNumber}`,
+      `${h.givenNames} ${h.surname}`,
+      `${t('issued')}: ${cred.issuedOn} · ${t('expires')}: ${cred.expiresOn}`,
+      ...(cred.licenceClass ? [`${t('class')}: ${cred.licenceClass}`] : []),
+      ...(cred.vehicle ? [`${t('plate')}: ${cred.vehicle.plate} · ${t('vin')}: ${cred.vehicle.vin}`] : []),
+      tr('Specimen — not a valid document', 'Spécimen — document non valide'),
+    ].join('\n');
+    try {
+      if (Platform.OS === 'web') await navigator.clipboard.writeText(lines);
+      else await Share.share({ message: lines });
+      setNote(tr('All information copied.', 'Toute l’information a été copiée.'));
+    } catch {
+      setNote(tr('Copying isn’t available here.', 'La copie n’est pas offerte ici.'));
+    }
+  }
 
   return (
     <Screen>
@@ -75,6 +114,32 @@ export default function CredentialScreen() {
         )}
         <Row label={t('address')} value={`${h.address.line1}${h.address.line2 ? `, ${h.address.line2}` : ''}\n${h.address.city} ${h.address.province} ${h.address.postalCode}`} />
       </Card>
+
+      <Widget title={tr('Document actions', 'Actions')}>
+        <ListItem
+          icon={isFavourite ? 'star' : 'star-outline'}
+          title={isFavourite ? tr('Remove from favourites', 'Retirer des favoris') : tr('Add to favourites', 'Ajouter aux favoris')}
+          subtitle={tr('Favourites show first on your home screen', 'Les favoris s’affichent en premier sur l’accueil')}
+          onPress={() => void toggleFavourite()}
+        />
+        <Divider inset={52} />
+        <ListItem icon="copy-outline" title={tr('Copy all information', 'Copier toute l’information')} onPress={() => void copyAll()} />
+        <Divider inset={52} />
+        <ListItem icon="create-outline" title={tr('Request a correction', 'Demander une correction')} subtitle={tr('Something on this document is wrong', 'Une information est erronée')} onPress={() => router.push(`/services/document-correction?credentialId=${cred.id}`)} />
+      </Widget>
+      {note && <Notice tone="success">{note}</Notice>}
+
+      <Widget title={tr('Related services', 'Services connexes')}>
+        {RELATED[cred.type].map((sid, i) => {
+          const s = serviceById(sid)!;
+          return (
+            <View key={sid}>
+              {i > 0 && <Divider inset={52} />}
+              <ListItem icon={CATEGORY_ICON[s.category]} title={pick(s.name)} onPress={() => router.push(serviceHref(s))} />
+            </View>
+          );
+        })}
+      </Widget>
     </Screen>
   );
 }
