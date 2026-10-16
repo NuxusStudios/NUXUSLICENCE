@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-n
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
-import { Chip, Tile, Widget } from '../../components/kit';
+import { Chip, LicenceStatusPill, Tile, Widget } from '../../components/kit';
 import { Badge, Button, Card, Divider, ErrorState, ListItem, Loading, PressScale, Screen, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { money } from '../../lib/format';
@@ -32,6 +32,7 @@ export default function Home() {
   const today = new Intl.DateTimeFormat(lang === 'fr' ? 'fr-CA' : 'en-CA', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date());
 
   const favs = preferences.favouriteCards.map((id) => wallet.find((w) => w.id === id)).filter((w) => !!w);
+  const licence = wallet.find((w) => w.type === 'driver_licence');
   const cards = favs.length ? favs : wallet;
   const cardWidth = Math.min(width - 56, 340);
   const openRequests = requests.filter((r) => r.status === 'action_required' || r.status === 'awaiting_payment').length;
@@ -64,6 +65,18 @@ export default function Home() {
           {person.licenceNumber}
         </Txt>
       </View>
+
+      {/* The licence's live status, so opening the app is enough to know it's valid. */}
+      {licence && (
+        <PressScale onPress={() => router.push(`/credential/${licence.id}`)} accessibilityLabel={tr('Driver’s licence status', 'Statut du permis de conduire')} style={[styles.statusRow, { backgroundColor: c.surface, borderColor: c.hairline, boxShadow: c.shadow }]}>
+          <Ionicons name="card" size={20} color={c.textMuted} />
+          <Txt v="strong" style={{ flex: 1 }}>
+            {tr('Driver’s licence', 'Permis de conduire')}
+          </Txt>
+          <LicenceStatusPill status={licence.licenceStatus} />
+          <Ionicons name="chevron-forward" size={17} color={c.textFaint} />
+        </PressScale>
+      )}
 
       {bannerOpen && (
         <View style={[styles.banner, { backgroundColor: c.goldBg }]}>
@@ -204,6 +217,7 @@ const styles = StyleSheet.create({
   bellDot: { position: 'absolute', top: -2, right: -2, minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, borderWidth: 2 },
   bellDotText: { color: '#fff', fontSize: 11, fontFamily: fonts.bold },
   idStrip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md, paddingVertical: 10, borderRadius: radius.md, marginTop: -space.sm },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md, paddingVertical: space.md, borderRadius: radius.md, borderWidth: 1 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md, paddingVertical: space.md, borderRadius: radius.md },
   dueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   amount: { fontFamily: fonts.extrabold, fontSize: 38, lineHeight: 44, letterSpacing: -1.2, fontVariant: ['tabular-nums'] },

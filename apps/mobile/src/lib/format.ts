@@ -38,4 +38,16 @@ export function cardDate(iso: string): string {
   return iso.slice(0, 10).replace(/-/g, '/');
 }
 
+export function timeAgo(iso: string, lang: Lang = 'en'): string {
+  const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  const fr = lang === 'fr';
+  if (secs < 45) return fr ? "à l'instant" : 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return fr ? `il y a ${mins} min` : `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return fr ? `il y a ${hrs} h` : `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  return fr ? `il y a ${days} j` : `${days}d ago`;
+}
+
 export const METHOD = { card: 'Card', apple_pay: 'Apple Pay', google_pay: 'Google Pay', interac: 'Interac' } as const;

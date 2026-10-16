@@ -41,6 +41,8 @@ export interface Credential {
   /** Licence class (G, G2, M...) for driver licences. */
   licenceClass?: string;
   conditions?: string[];
+  /** Live driver's-licence status from the MTO driver record, refreshed automatically. */
+  licenceStatus?: import('./shared/licence-status.js').LicenceStatus;
   /** Vehicle permits point at a vehicle. */
   vehicleId?: string;
 }

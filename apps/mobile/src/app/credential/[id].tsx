@@ -7,10 +7,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
 import { VehiclePermitDocument } from '../../components/VehiclePermitDocument';
 import { FlipCard } from '../../components/FlipCard';
-import { Widget } from '../../components/kit';
+import { LicenceStatusCard, Widget } from '../../components/kit';
 import { Button, Card, Divider, ErrorState, ListItem, Loading, Notice, Row, Screen, SectionHeader, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
-import { QR_REFRESH_SECONDS } from '../../lib/config';
+import { DEMO_MODE, QR_REFRESH_SECONDS } from '../../lib/config';
 import { date } from '../../lib/format';
 import { CATEGORY_ICON, serviceHref } from '../../lib/icons';
 import { MAX_FAVOURITE_CARDS, serviceById } from '../../lib/shared/platform';
@@ -40,6 +40,19 @@ export default function CredentialScreen() {
   const prefs = useAsync(api.preferences);
   const [sharing, setSharing] = useState(false);
   const [note, setNote] = useState<string>();
+  const [refreshingStatus, setRefreshingStatus] = useState(false);
+
+  async function refreshStatus() {
+    setRefreshingStatus(true);
+    try {
+      await api.refreshLicenceStatus(id);
+      await reload();
+    } catch {
+      /* keep last-known status */
+    } finally {
+      setRefreshingStatus(false);
+    }
+  }
 
   useEffect(() => {
     if (data) navigation.setOptions({ title: t(data.type) });
@@ -86,7 +99,9 @@ export default function CredentialScreen() {
       ) : (
         <DocumentCard credential={cred} />
       )}
-      {cred.status !== 'valid' && <Notice tone="danger">{t(cred.status)}</Notice>}
+      {/* Live licence status, kept fresh automatically from the MTO record. */}
+      {cred.type === 'driver_licence' && <LicenceStatusCard status={cred.licenceStatus} onRefresh={refreshStatus} refreshing={refreshingStatus} />}
+      {cred.type !== 'driver_licence' && cred.status !== 'valid' && <Notice tone="danger">{t(cred.status)}</Notice>}
 
       {sharing ? (
         <Presentation credential={cred} onClose={() => setSharing(false)} />
@@ -128,6 +143,37 @@ export default function CredentialScreen() {
         <ListItem icon="create-outline" title={tr('Request a correction', 'Demander une correction')} subtitle={tr('Something on this document is wrong', 'Une information est erronée')} onPress={() => router.push(`/services/document-correction?credentialId=${cred.id}`)} />
       </Widget>
       {note && <Notice tone="success">{note}</Notice>}
+
+      {DEMO_MODE && cred.type === 'driver_licence' && (
+        <>
+          <SectionHeader>{tr('Demo', 'Démo')}</SectionHeader>
+          <Card style={{ gap: space.sm }}>
+            <Txt v="strong">{tr('Simulate an MTO status change', 'Simuler un changement de statut du MTO')}</Txt>
+            <Txt v="caption" muted>
+              {tr('Pretend the driver record reported a new status. The app picks it up automatically and alerts you.', 'Faites comme si le dossier de conduite signalait un nouveau statut. L’application le détecte automatiquement et vous alerte.')}
+            </Txt>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+              {([
+                ['Valid', tr('Valid', 'Valide')],
+                ['NotValid', tr('Not valid', 'Non valide')],
+                ['ValidWithIgnitionInterlock', tr('Interlock', 'Antidémarreur')],
+                ['NotFound', tr('No record', 'Aucun dossier')],
+              ] as const).map(([code, label]) => (
+                <Button
+                  key={code}
+                  title={label}
+                  size="md"
+                  variant="secondary"
+                  onPress={async () => {
+                    await api.setDemoLicenceStatus(code);
+                    await reload();
+                  }}
+                />
+              ))}
+            </View>
+          </Card>
+        </>
+      )}
 
       <Widget title={tr('Related services', 'Services connexes')}>
         {RELATED[cred.type].map((sid, i) => {

@@ -75,6 +75,21 @@ await step('wallet → licence → QR', async () => {
   await app.getByRole('button', { name: /Done/ }).click();
   await back();
 });
+await step('licence status is live and reacts to an MTO change', async () => {
+  await app.getByRole('tab', { name: /Documents/ }).click();
+  await app.getByRole('button', { name: "Driver's licence", exact: true }).filter({ visible: true }).first().click({ position: { x: 60, y: 22 } });
+  await text('Live check').waitFor();
+  await text('This licence is valid and in good standing.').waitFor();
+  await shot('12-licence-status');
+  // Simulate MTO reporting a suspension; the app reflects it automatically.
+  await btn('Not valid').click();
+  await text('This licence is not currently valid to drive.', { exact: false }).waitFor();
+  await shot('13-licence-suspended');
+  // Restore so later steps are unaffected, then leave the screen.
+  await btn('Valid').click();
+  await text('This licence is valid and in good standing.').waitFor();
+  await back();
+});
 await step('simulate a red-light camera ticket and open it', async () => {
   await app.getByRole('tab', { name: /Tickets/ }).click();
   await btn('Simulate a red light camera ticket').click();

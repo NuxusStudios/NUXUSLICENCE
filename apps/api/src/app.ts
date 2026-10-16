@@ -17,6 +17,8 @@ import {
   verifyPresentation,
 } from './crypto.js';
 import { effectiveStatus, ingestCameraEvent } from './fines.js';
+import { getLicenceStatusProvider, DemoLicenceStatusProvider } from './licence-status.js';
+import { buildLicenceStatus, isAdverseChange, licenceStatusMessage, shouldRefresh, type LicenceStatus, type MtoLicenceStatus } from './shared/licence-status.js';
 import { notify } from './notifications.js';
 import { charge } from './payments.js';
 import { ORGANIZATIONS, SERVICES, serviceById } from './catalog.js';
@@ -269,6 +271,58 @@ export async function buildApp(opts: AppOptions = {}) {
       },
       vehicle,
     };
+  }
+
+  // --- automatic licence-status checking ----------------------------------
+  // The holder proved the licence is theirs at sign-up; from then on the
+  // backend keeps its status fresh from the MTO driver record on its own.
+
+  /** English message for the inbox when a status turns adverse. */
+  function adverseStatusNotice(status: LicenceStatus): { title: string; body: string } {
+    if (status.display === 'suspended') {
+      return { title: 'Your driver’s licence is no longer valid', body: 'A status check shows your licence is not currently valid to drive. Contact ServiceOntario. You can still open the app.' };
+    }
+    return { title: 'We couldn’t confirm your driver’s licence', body: 'The registry has no matching record for your licence right now. Please contact support.' };
+  }
+
+  /**
+   * Refresh the status of the account's driver's licences from the provider.
+   * Best-effort: a provider outage leaves the last-known status in place rather
+   * than failing the screen that triggered the refresh. Returns the credentials
+   * whose stored status changed.
+   */
+  async function refreshLicenceStatuses(account: Account, opts: { force?: boolean } = {}): Promise<Credential[]> {
+    const cfg = config.licenceStatus;
+    const licences = store.credentialsFor(account.personId).filter((c) => c.type === 'driver_licence');
+    const now = new Date();
+    const due = licences.filter((c) => opts.force || shouldRefresh(c.licenceStatus, now, cfg.minRecheckSeconds));
+    if (!due.length) return [];
+    let results;
+    try {
+      results = await getLicenceStatusProvider().check(due.map((c) => c.documentNumber));
+    } catch {
+      return []; // keep last-known status; next open retries
+    }
+    const changed: Credential[] = [];
+    for (const c of due) {
+      const result = results.get(c.documentNumber);
+      if (!result) continue;
+      const previous = c.licenceStatus;
+      const next = buildLicenceStatus(result, { expiresOn: c.expiresOn, source: getLicenceStatusProvider().source === 'mto_batch' ? 'mto_batch' : 'demo', now, recheckSeconds: cfg.recheckSeconds });
+      c.licenceStatus = next;
+      // Keep the credential's own status in step so the wallet, QR and verifier agree.
+      c.status = next.display === 'suspended' ? 'suspended' : next.display === 'not_found' ? 'revoked' : c.status === 'revoked' ? 'revoked' : 'valid';
+      if (!previous || previous.code !== next.code || previous.display !== next.display) {
+        changed.push(c);
+        if (isAdverseChange(previous, next)) {
+          const note = adverseStatusNotice(next);
+          notify(store, account, { category: 'security', title: note.title, body: note.body, link: `/credential/${c.id}` });
+        } else if (previous && (previous.display === 'suspended' || previous.display === 'not_found') && next.display === 'valid') {
+          notify(store, account, { category: 'general', title: 'Your driver’s licence is valid again', body: 'A status check shows your licence is back in good standing.', link: `/credential/${c.id}` });
+        }
+      }
+    }
+    return changed;
   }
 
   function ageOn(dob: string, at = new Date()): number {
@@ -582,6 +636,8 @@ export async function buildApp(opts: AppOptions = {}) {
 
     secure.get('/v1/me', async (req) => {
       const account = me(req);
+      // Refresh licence status on app open (the app loads /v1/me first).
+      await refreshLicenceStatuses(account);
       const person = personOf(account);
       return {
         account: { id: account.id, email: account.email, phone: account.phone, language: account.language, identityAssurance: account.identityAssurance, createdAt: account.createdAt, pinSet: !!account.pinHash },
@@ -606,6 +662,22 @@ export async function buildApp(opts: AppOptions = {}) {
 
     secure.get('/v1/me/access-log', async (req) => store.accessLogFor(me(req).id));
 
+    /**
+     * Demo only: pretend MTO reported a new status for the user's licence, to
+     * show the automatic-refresh and alert path. No-op unless the demo
+     * provider is active.
+     */
+    secure.post('/v1/demo/licence-status', async (req) => {
+      const provider = getLicenceStatusProvider();
+      if (!(provider instanceof DemoLicenceStatusProvider)) throw new HttpError(409, 'not_demo', 'Available in demo mode only.');
+      const { code } = z.object({ code: z.enum(['Valid', 'NotValid', 'ValidWithIgnitionInterlock', 'ValidWithIgnitionInterlockAndWCode', 'NotFound'] as const satisfies readonly MtoLicenceStatus[]) }).parse(req.body);
+      const licence = store.credentialsFor(me(req).personId).find((c) => c.type === 'driver_licence');
+      if (!licence) throw new HttpError(404, 'not_found', 'No driver’s licence on file.');
+      provider.setOverride(licence.documentNumber, code);
+      const changed = await refreshLicenceStatuses(me(req), { force: true });
+      return { credentialId: licence.id, status: licence.licenceStatus, changed: changed.length > 0 };
+    });
+
     /** Lost or stolen phone: invalidate every presentation issued so far. */
     secure.post('/v1/me/revoke-wallet', async (req) => {
       const account = me(req);
@@ -615,12 +687,25 @@ export async function buildApp(opts: AppOptions = {}) {
     });
 
     // --- wallet ------------------------------------------------------------
-    secure.get('/v1/wallet', async (req) => store.credentialsFor(me(req).personId).map(credentialView));
+    secure.get('/v1/wallet', async (req) => {
+      await refreshLicenceStatuses(me(req));
+      return store.credentialsFor(me(req).personId).map(credentialView);
+    });
 
     secure.get<{ Params: { id: string } }>('/v1/wallet/:id', async (req) => {
       const c = store.credentials.get(req.params.id);
       if (!c || c.personId !== me(req).personId) throw new HttpError(404, 'not_found', 'Credential not found');
+      if (c.type === 'driver_licence') await refreshLicenceStatuses(me(req));
       return credentialView(c);
+    });
+
+    /** Force an immediate re-check (pull-to-refresh on the licence screen). */
+    secure.post<{ Params: { id: string } }>('/v1/wallet/:id/status/refresh', async (req) => {
+      const c = store.credentials.get(req.params.id);
+      if (!c || c.personId !== me(req).personId) throw new HttpError(404, 'not_found', 'Credential not found');
+      if (c.type !== 'driver_licence') throw new HttpError(400, 'not_a_licence', 'Only driver’s licences have a live status.');
+      await refreshLicenceStatuses(me(req), { force: true });
+      return credentialView(store.credentials.get(req.params.id)!);
     });
 
     secure.post<{ Params: { id: string } }>('/v1/wallet/:id/presentations', async (req) => {
@@ -902,11 +987,49 @@ export async function buildApp(opts: AppOptions = {}) {
     });
   });
 
+  /**
+   * Scheduled sweep: re-check every account's licences in one batched pass
+   * (how the MTO feed is meant to be used). Called nightly by server.ts.
+   * Returns how many statuses changed.
+   */
+  async function sweepLicenceStatuses(): Promise<{ checked: number; changed: number }> {
+    const licences = [...store.credentials.values()].filter((c) => c.type === 'driver_licence');
+    if (!licences.length) return { checked: 0, changed: 0 };
+    let results;
+    try {
+      results = await getLicenceStatusProvider().check(licences.map((c) => c.documentNumber));
+    } catch (e) {
+      app.log.error({ err: e }, 'licence-status sweep failed');
+      return { checked: 0, changed: 0 };
+    }
+    const now = new Date();
+    let changed = 0;
+    for (const c of licences) {
+      const result = results.get(c.documentNumber);
+      if (!result) continue;
+      const previous = c.licenceStatus;
+      const next = buildLicenceStatus(result, { expiresOn: c.expiresOn, source: getLicenceStatusProvider().source === 'mto_batch' ? 'mto_batch' : 'demo', now, recheckSeconds: config.licenceStatus.recheckSeconds });
+      c.licenceStatus = next;
+      c.status = next.display === 'suspended' ? 'suspended' : next.display === 'not_found' ? 'revoked' : c.status === 'revoked' ? 'revoked' : 'valid';
+      if (!previous || previous.code !== next.code) {
+        changed++;
+        const account = store.findAccountByPerson(c.personId);
+        if (account && isAdverseChange(previous, next)) {
+          const note = adverseStatusNotice(next);
+          notify(store, account, { category: 'security', title: note.title, body: note.body, link: `/credential/${c.id}` });
+        }
+      }
+    }
+    return { checked: licences.length, changed };
+  }
+  app.decorate('sweepLicenceStatuses', sweepLicenceStatuses);
+
   return app;
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
     store: Store;
+    sweepLicenceStatuses: () => Promise<{ checked: number; changed: number }>;
   }
 }

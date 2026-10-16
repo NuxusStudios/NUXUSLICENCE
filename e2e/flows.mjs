@@ -110,6 +110,13 @@ await step('access log shows the police check', async () => {
   await shot('09-access-log');
 });
 
+await step('licence status is live and refreshes on open', async () => {
+  await page.goto(`${APP}/credential/cred_alex_dl`);
+  await text('Live check').waitFor();
+  await text('This licence is valid and in good standing.').waitFor();
+  await shot('09b-licence-status');
+});
+
 await step('camera event from the processing centre lands on the owner account', async () => {
   const res = await fetch(`${API}/v1/integrations/camera-events`, {
     method: 'POST',

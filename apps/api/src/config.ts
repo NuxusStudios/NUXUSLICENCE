@@ -29,4 +29,27 @@ export const config = {
   homeJurisdiction: env('HOME_JURISDICTION', 'ON'),
   /** One-time codes are returned in API responses outside production (no SMS gateway in dev). */
   exposeDevCodes: !isProduction,
+
+  /** Automatic licence-status checking (MTO driver record). */
+  licenceStatus: {
+    /**
+     * Which adapter answers status checks. 'demo' returns deterministic
+     * statuses from seed data; 'mto_batch' calls the real MTO account-based
+     * feed (needs the endpoint + key below and a data-sharing agreement).
+     */
+    provider: env('LICENCE_STATUS_PROVIDER', isProduction ? 'mto_batch' : 'demo') as 'demo' | 'mto_batch',
+    /** MTO batch/API feed base URL and account key (production). */
+    mtoEndpoint: process.env.MTO_DLC_ENDPOINT,
+    mtoApiKey: process.env.MTO_DLC_API_KEY,
+    /**
+     * Refresh happens on app open, but a status re-checked within this many
+     * seconds is reused, so one screen-open doesn't fan out into many calls to
+     * a metered feed. 0 = always re-check (fine for the demo provider).
+     */
+    minRecheckSeconds: Number(env('LICENCE_RECHECK_MIN_SECONDS', isProduction ? '300' : '0')),
+    /** Scheduled full sweep: how far ahead the next automatic check is set. */
+    recheckSeconds: Number(env('LICENCE_RECHECK_SECONDS', '86400')),
+    /** Max licence numbers per MTO batch order (the live service caps at 100). */
+    batchSize: Number(env('LICENCE_BATCH_SIZE', '100')),
+  },
 };

@@ -12,6 +12,7 @@
 // ship inside an app.
 
 import { base64url, fromBase64url, sha256Hex } from './hash';
+import { buildLicenceStatus, isAdverseChange, shouldRefresh, type LicenceStatusResult, type MtoLicenceStatus } from '../shared/licence-status';
 import {
   FAQ,
   LOCATIONS,
@@ -207,6 +208,47 @@ function status(f: FineRec): Fine['status'] {
 const fineView = (f: FineRec): Fine => ({ ...f, status: status(f) });
 const finesOf = (personId: string) => [...fines.values()].filter((f) => f.personId === personId).sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
 const inboxOf = (accountId: string) => [...inbox.values()].filter((m) => m.accountId === accountId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+// Automatic licence-status checking (mirrors apps/api; the real app pulls from
+// the MTO driver record). Deterministic status per licence number, with an
+// override map the demo tool uses to show a suspension arriving.
+const RECHECK_SECONDS = 86400;
+const licenceOverrides = new Map<string, MtoLicenceStatus>();
+function demoLicenceStatus(licenceNumber: string): LicenceStatusResult {
+  const key = norm(licenceNumber);
+  const code = licenceOverrides.get(key) ?? ((): MtoLicenceStatus => {
+    let h = 0;
+    for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const b = h % 100;
+    return b < 90 ? 'Valid' : b < 96 ? 'ValidWithIgnitionInterlock' : b < 98 ? 'ValidWithIgnitionInterlockAndWCode' : 'NotValid';
+  })();
+  return { code, interlock: code === 'ValidWithIgnitionInterlock' || code === 'ValidWithIgnitionInterlockAndWCode', wCode: code === 'ValidWithIgnitionInterlockAndWCode' };
+}
+
+/** Refresh the account's driver's-licence status on open; returns true if anything changed. */
+function refreshLicence(a: Account, force = false): boolean {
+  const now = new Date();
+  let changed = false;
+  for (const c of credentials.values()) {
+    if (c.personId !== a.personId || c.type !== 'driver_licence') continue;
+    if (!force && !shouldRefresh(c.licenceStatus, now, 0)) continue;
+    const previous = c.licenceStatus;
+    const next = buildLicenceStatus(demoLicenceStatus(c.documentNumber), { expiresOn: c.expiresOn, source: 'demo', now, recheckSeconds: RECHECK_SECONDS });
+    c.licenceStatus = next;
+    c.status = next.display === 'suspended' ? 'suspended' : next.display === 'not_found' ? 'revoked' : c.status === 'revoked' ? 'revoked' : 'valid';
+    if (!previous || previous.code !== next.code) {
+      changed = true;
+      if (isAdverseChange(previous, next)) {
+        notify(a.id, next.display === 'suspended'
+          ? { category: 'security', title: 'Your driver’s licence is no longer valid', body: 'A status check shows your licence is not currently valid to drive. Contact ServiceOntario.', link: `/credential/${c.id}` }
+          : { category: 'security', title: 'We couldn’t confirm your driver’s licence', body: 'The registry has no matching record for your licence right now. Please contact support.', link: `/credential/${c.id}` });
+      } else if (previous && (previous.display === 'suspended' || previous.display === 'not_found') && next.display === 'valid') {
+        notify(a.id, { category: 'general', title: 'Your driver’s licence is valid again', body: 'A status check shows your licence is back in good standing.', link: `/credential/${c.id}` });
+      }
+    }
+  }
+  return changed;
+}
 
 function credentialView(c: Cred): Credential {
   const p = people.get(c.personId)!;
@@ -543,6 +585,7 @@ function route(method: string, path: string, body: Body, token: string | null): 
 
   switch (route) {
     case 'GET /me':
+      refreshLicence(a);
       return { account: { id: a.id, email: a.email, phone: a.phone, language: a.language, identityAssurance: 'IAL2', createdAt: a.createdAt, pinSet: !!a.pin }, person, summary: summary(a), preferences: prefsOf(a.id) };
     case 'PATCH /me':
       if (body?.language) a.language = body.language;
@@ -595,11 +638,27 @@ function route(method: string, path: string, body: Body, token: string | null): 
       return simulateCameraTicket(a);
 
     case 'GET /wallet':
+      refreshLicence(a);
       return [...credentials.values()].filter((c) => c.personId === a.personId).map(credentialView);
     case 'GET /wallet/:id': {
       const c = credentials.get(id!);
       if (!c || c.personId !== a.personId) fail(404, 'not_found', 'Credential not found');
+      if (c!.type === 'driver_licence') refreshLicence(a);
       return credentialView(c!);
+    }
+    case 'POST /wallet/:id/status/refresh': {
+      const c = credentials.get(id!);
+      if (!c || c.personId !== a.personId) fail(404, 'not_found', 'Credential not found');
+      if (c!.type !== 'driver_licence') fail(400, 'not_a_licence', 'Only driver’s licences have a live status.');
+      refreshLicence(a, true);
+      return credentialView(credentials.get(id!)!);
+    }
+    case 'POST /demo/licence-status': {
+      const lic = [...credentials.values()].find((c) => c.personId === a.personId && c.type === 'driver_licence');
+      if (!lic) fail(404, 'not_found', 'No driver’s licence on file.');
+      licenceOverrides.set(norm(lic!.documentNumber), String(body?.code) as MtoLicenceStatus);
+      const changed = refreshLicence(a, true);
+      return { credentialId: lic!.id, status: lic!.licenceStatus, changed };
     }
     case 'POST /wallet/:id/presentations': {
       const c = credentials.get(id!);

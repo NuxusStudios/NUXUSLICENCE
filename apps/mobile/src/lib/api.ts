@@ -132,6 +132,7 @@ export const api = {
 
   wallet: () => request<Credential[]>('GET', '/v1/wallet'),
   credential: (id: string) => request<Credential>('GET', `/v1/wallet/${id}`),
+  refreshLicenceStatus: (id: string) => request<Credential>('POST', `/v1/wallet/${id}/status/refresh`, {}),
   present: (id: string, disclosure: Disclosure) =>
     request<{ token: string; expiresInSeconds: number }>('POST', `/v1/wallet/${id}/presentations`, { disclosure }),
   verify: (token: string, verifier: string) => request<VerifyResult>('POST', '/v1/verify', { token, verifier }),
@@ -175,6 +176,10 @@ export const api = {
 
   /** Demo mode only: pretend a red-light camera just recorded one of your plates. */
   simulateCameraTicket: () => request<{ fineId: string; plate: string }>('POST', '/v1/demo/camera-event', {}),
+
+  /** Demo mode only: pretend MTO reported a new status for your licence. */
+  setDemoLicenceStatus: (code: import('./types').MtoLicenceStatus) =>
+    request<{ credentialId: string; status: import('./types').LicenceStatus; changed: boolean }>('POST', '/v1/demo/licence-status', { code }),
 
   sign: (body: { documentTitle: string; documentContent: string; consent: true; pin: string }) =>
     request<SignatureRecord>('POST', '/v1/signatures', body),

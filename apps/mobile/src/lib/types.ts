@@ -2,6 +2,11 @@
 import type { Consent, DashboardAction, Preferences, ServiceDefinition, ServiceRequest } from './shared/platform';
 
 export type {
+  LicenceStatus,
+  LicenceStatusDisplay,
+  MtoLicenceStatus,
+} from './shared/licence-status';
+export type {
   Appointment,
   Consent,
   DashboardAction,
@@ -66,6 +71,8 @@ export interface Credential {
   status: 'valid' | 'suspended' | 'expired' | 'revoked';
   licenceClass?: string;
   conditions?: string[];
+  /** Live driver's-licence status from the MTO driver record, refreshed automatically. */
+  licenceStatus?: import('./shared/licence-status').LicenceStatus;
   vehicleId?: string;
   holder: Omit<Person, 'id' | 'licenceNumber'>;
   vehicle?: Vehicle;

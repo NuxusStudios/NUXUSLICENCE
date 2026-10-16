@@ -1,0 +1,158 @@
+// Automatic driver's-licence status checking.
+//
+// A person proves the licence is theirs ONCE at sign-up (document scan +
+// liveness, matched to the registry). After that the backend refreshes the
+// licence's status from the authoritative source on its own, so the app shows
+// "Valid" without the person ever re-entering their licence number.
+//
+// The authoritative source is Ontario's MTO driver record — the same system
+// of record that backs ServiceOntario's public Driver's Licence Check
+// (dlc.rus.mto.gov.on.ca). That public page is a human-only, CAPTCHA-gated,
+// pay-per-order webpage; CivicPass does NOT drive it. Production connects to
+// MTO's account-based batch/API feed under a data-sharing agreement. Until
+// that feed is commissioned, a demo provider returns deterministic statuses so
+// the whole mechanism runs on fictional data (see apps/api/src/licence-status.ts).
+//
+// This module is the framework-free core: the status vocabulary (mirrored from
+// the real service), how a raw status maps to what the card shows, the refresh
+// policy, and bilingual labels. Shared by the API and the app's demo backend.
+
+import type { L } from './platform.js';
+
+/**
+ * Raw status codes returned by the MTO Driver's Licence Check. Names match the
+ * values seen in the live service so a real adapter maps 1:1.
+ */
+export type MtoLicenceStatus =
+  | 'Valid'
+  | 'NotValid'
+  | 'ValidWithIgnitionInterlock'
+  | 'ValidWithIgnitionInterlockAndWCode'
+  | 'NotFound';
+
+export const MTO_LICENCE_STATUSES: MtoLicenceStatus[] = ['Valid', 'NotValid', 'ValidWithIgnitionInterlock', 'ValidWithIgnitionInterlockAndWCode', 'NotFound'];
+
+/** How the status reads on the card. Expiry is derived locally, not from MTO. */
+export type LicenceStatusDisplay = 'valid' | 'suspended' | 'expired' | 'not_found' | 'unchecked';
+
+export type LicenceStatusSource = 'mto_batch' | 'mto_consent' | 'demo' | 'manual';
+
+/** Stored on a driver's-licence credential; refreshed automatically. */
+export interface LicenceStatus {
+  /** Raw code from the source. */
+  code: MtoLicenceStatus;
+  /** Reduced status the UI colours by. */
+  display: LicenceStatusDisplay;
+  /** Driving allowed only with an approved ignition interlock device. */
+  interlock: boolean;
+  /** "W" condition accompanies the interlock. */
+  wCode: boolean;
+  /** When the status was last confirmed with the source. */
+  checkedAt: string;
+  /** Earliest time an automatic re-check should run. */
+  nextCheckAt: string;
+  /** Where the status came from. */
+  source: LicenceStatusSource;
+}
+
+/** The provider's answer for one licence number, before expiry is applied. */
+export interface LicenceStatusResult {
+  code: MtoLicenceStatus;
+  interlock: boolean;
+  wCode: boolean;
+}
+
+/** Decompose a raw MTO code into the flags the card needs. */
+export function decodeMtoStatus(code: MtoLicenceStatus): { display: Exclude<LicenceStatusDisplay, 'expired' | 'unchecked'>; interlock: boolean; wCode: boolean } {
+  switch (code) {
+    case 'Valid':
+      return { display: 'valid', interlock: false, wCode: false };
+    case 'ValidWithIgnitionInterlock':
+      return { display: 'valid', interlock: true, wCode: false };
+    case 'ValidWithIgnitionInterlockAndWCode':
+      return { display: 'valid', interlock: true, wCode: true };
+    case 'NotValid':
+      // The source reports a licence that is not currently valid to drive
+      // (suspended, cancelled or otherwise not in good standing).
+      return { display: 'suspended', interlock: false, wCode: false };
+    case 'NotFound':
+      return { display: 'not_found', interlock: false, wCode: false };
+  }
+}
+
+/**
+ * Build the stored status from a provider result. Expiry is layered on top:
+ * MTO "Valid" plus a past expiry date shows as expired, since the card is the
+ * thing that lapsed. `checkedAt` defaults to now.
+ */
+export function buildLicenceStatus(result: LicenceStatusResult, opts: { expiresOn: string; source: LicenceStatusSource; now: Date; recheckSeconds: number }): LicenceStatus {
+  const { display, interlock, wCode } = decodeMtoStatus(result.code);
+  const expired = display === 'valid' && new Date(opts.expiresOn).getTime() < opts.now.getTime();
+  return {
+    code: result.code,
+    display: expired ? 'expired' : display,
+    interlock,
+    wCode,
+    checkedAt: opts.now.toISOString(),
+    nextCheckAt: new Date(opts.now.getTime() + opts.recheckSeconds * 1000).toISOString(),
+    source: opts.source,
+  };
+}
+
+/**
+ * Whether an automatic re-check should run now. Refreshing on every app open
+ * is the product goal, but a short floor keeps one screen-open from fanning
+ * out into many calls to a metered feed; `minAgeSeconds` is that floor.
+ */
+export function shouldRefresh(status: LicenceStatus | undefined, now: Date, minAgeSeconds: number): boolean {
+  if (!status) return true;
+  return now.getTime() - new Date(status.checkedAt).getTime() >= minAgeSeconds * 1000;
+}
+
+/** A status change worth telling the holder about (good news isn't pushed). */
+export function isAdverseChange(from: LicenceStatus | undefined, to: LicenceStatus): boolean {
+  const bad = (d: LicenceStatusDisplay) => d === 'suspended' || d === 'not_found';
+  return bad(to.display) && (!from || !bad(from.display));
+}
+
+export const LICENCE_STATUS_LABEL: Record<LicenceStatusDisplay, L> = {
+  valid: { en: 'Valid', fr: 'Valide' },
+  suspended: { en: 'Not valid', fr: 'Non valide' },
+  expired: { en: 'Expired', fr: 'Expiré' },
+  not_found: { en: 'No record found', fr: 'Aucun dossier trouvé' },
+  unchecked: { en: 'Checking…', fr: 'Vérification…' },
+};
+
+export const LICENCE_STATUS_TONE: Record<LicenceStatusDisplay, 'success' | 'danger' | 'warning' | 'neutral'> = {
+  valid: 'success',
+  suspended: 'danger',
+  expired: 'warning',
+  not_found: 'danger',
+  unchecked: 'neutral',
+};
+
+/** Short condition chips to show next to the status. */
+export function licenceConditionLabels(status: Pick<LicenceStatus, 'interlock' | 'wCode'>): L[] {
+  const out: L[] = [];
+  if (status.interlock) out.push({ en: 'Ignition interlock required', fr: 'Antidémarreur requis' });
+  if (status.wCode) out.push({ en: 'Condition “W”', fr: 'Condition « W »' });
+  return out;
+}
+
+/** One-line explanation under the badge. */
+export function licenceStatusMessage(status: LicenceStatus): L {
+  switch (status.display) {
+    case 'valid':
+      return status.interlock
+        ? { en: 'Valid to drive with an approved ignition interlock device.', fr: 'Valide pour conduire avec un antidémarreur approuvé.' }
+        : { en: 'This licence is valid and in good standing.', fr: 'Ce permis est valide et en règle.' };
+    case 'suspended':
+      return { en: 'This licence is not currently valid to drive. Contact ServiceOntario.', fr: 'Ce permis n’est pas valide pour conduire actuellement. Communiquez avec ServiceOntario.' };
+    case 'expired':
+      return { en: 'The licence card has expired. Renew it to restore your digital licence.', fr: 'La carte de permis est expirée. Renouvelez-la pour rétablir votre permis numérique.' };
+    case 'not_found':
+      return { en: 'We could not confirm this licence with the registry. Please contact support.', fr: 'Nous n’avons pas pu confirmer ce permis auprès du registre. Veuillez communiquer avec le soutien.' };
+    case 'unchecked':
+      return { en: 'Confirming your licence status…', fr: 'Confirmation du statut de votre permis…' };
+  }
+}

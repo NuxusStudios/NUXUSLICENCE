@@ -9,9 +9,10 @@ import { router } from 'expo-router';
 import { Badge, Button, Card, IconTile, Notice, PressScale, Txt, type IconName } from './ui';
 import { DEMO_MODE } from '../lib/config';
 import { DEMO_PIN } from '../lib/demo/backend';
-import { dateTime } from '../lib/format';
+import { dateTime, timeAgo } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { passwordChecks, type Appointment, type RequestEvent, type RequestStatus } from '../lib/shared/platform';
+import { LICENCE_STATUS_LABEL, LICENCE_STATUS_TONE, licenceConditionLabels, licenceStatusMessage, type LicenceStatus } from '../lib/shared/licence-status';
 import { fonts, radius, space, useTheme } from '../lib/theme';
 
 // ---------------------------------------------------------------------------
@@ -533,3 +534,82 @@ const styles = StyleSheet.create({
   padHint: { position: 'absolute', left: 16, top: 12, color: '#8C96A6', fontFamily: fonts.medium, fontSize: 13 },
   padLine: { position: 'absolute', left: 16, right: 16, bottom: 34, height: 1, backgroundColor: '#C9CFD8' },
 });
+
+// ---------------------------------------------------------------------------
+// Live driver's-licence status (refreshed automatically from the MTO record)
+// ---------------------------------------------------------------------------
+
+/**
+ * Status pill + conditions + "checked Xh ago", with an optional manual
+ * re-check. The badge updates on its own because the screens refresh the
+ * licence on open; onRefresh just lets the user force it now.
+ */
+export function LicenceStatusCard({ status, onRefresh, refreshing }: { status?: LicenceStatus; onRefresh?: () => void; refreshing?: boolean }) {
+  const c = useTheme();
+  const { tr, pick, lang } = useI18n();
+  const display = status?.display ?? 'unchecked';
+  const tone = LICENCE_STATUS_TONE[display];
+  const icon = display === 'valid' ? 'shield-checkmark' : display === 'expired' ? 'time' : display === 'unchecked' ? 'sync' : 'alert-circle';
+  const toneColor = tone === 'success' ? c.success : tone === 'danger' ? c.danger : tone === 'warning' ? c.warning : c.textMuted;
+  const toneBg = tone === 'success' ? c.successBg : tone === 'danger' ? c.dangerBg : tone === 'warning' ? c.warningBg : c.surfaceAlt;
+  const conditions = status ? licenceConditionLabels(status) : [];
+  return (
+    <Card style={{ gap: space.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+        <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: toneBg, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name={icon as IconName} size={24} color={toneColor} />
+        </View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' }}>
+            <Txt v="headline" style={{ color: toneColor }}>
+              {pick(LICENCE_STATUS_LABEL[display])}
+            </Txt>
+            <Badge label={tr('Live check', 'Vérification en direct')} tone={tone === 'success' ? 'success' : tone === 'danger' ? 'danger' : 'neutral'} />
+          </View>
+          {status ? (
+            <Txt v="caption" faint>
+              {tr('Checked automatically', 'Vérifié automatiquement')} · {timeAgo(status.checkedAt, lang)}
+            </Txt>
+          ) : null}
+        </View>
+        {onRefresh ? (
+          <PressScale onPress={onRefresh} accessibilityLabel={tr('Check now', 'Vérifier maintenant')} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="refresh" size={20} color={refreshing ? c.textFaint : c.text} />
+          </PressScale>
+        ) : null}
+      </View>
+      {status ? (
+        <Txt v="callout" muted>
+          {pick(licenceStatusMessage(status))}
+        </Txt>
+      ) : null}
+      {conditions.length ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          {conditions.map((cond) => (
+            <Badge key={cond.en} label={pick(cond)} tone="warning" />
+          ))}
+        </View>
+      ) : null}
+      <Txt v="caption" faint>
+        {tr('Source: Ontario driver record (prototype uses demo data)', 'Source : dossier de conduite de l’Ontario (le prototype utilise des données fictives)')}
+      </Txt>
+    </Card>
+  );
+}
+
+/** Compact inline status pill for the home screen. */
+export function LicenceStatusPill({ status }: { status?: LicenceStatus }) {
+  const c = useTheme();
+  const { pick } = useI18n();
+  const display = status?.display ?? 'unchecked';
+  const tone = LICENCE_STATUS_TONE[display];
+  const color = tone === 'success' ? c.success : tone === 'danger' ? c.danger : tone === 'warning' ? c.warning : c.textMuted;
+  const bg = tone === 'success' ? c.successBg : tone === 'danger' ? c.dangerBg : tone === 'warning' ? c.warningBg : c.surfaceAlt;
+  const icon = display === 'valid' ? 'shield-checkmark' : display === 'expired' ? 'time' : display === 'unchecked' ? 'sync' : 'alert-circle';
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start' }}>
+      <Ionicons name={icon as IconName} size={14} color={color} />
+      <Text style={{ color, fontFamily: fonts.semibold, fontSize: 12.5 }}>{pick(LICENCE_STATUS_LABEL[display])}</Text>
+    </View>
+  );
+}
