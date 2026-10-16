@@ -52,4 +52,12 @@ export const config = {
     /** Max licence numbers per MTO batch order (the live service caps at 100). */
     batchSize: Number(env('LICENCE_BATCH_SIZE', '100')),
   },
+
+  /** Parking tickets (municipal APS; vendor gtechna). */
+  parking: {
+    /** 'demo' resolves notice numbers locally; 'gtechna' calls the municipal integration. */
+    provider: env('PARKING_PROVIDER', isProduction ? 'gtechna' : 'demo') as 'demo' | 'gtechna',
+    endpoint: process.env.PARKING_ENDPOINT,
+    apiKey: process.env.PARKING_API_KEY,
+  },
 };

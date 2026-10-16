@@ -6,6 +6,7 @@ export type {
   LicenceStatusDisplay,
   MtoLicenceStatus,
 } from './shared/licence-status';
+export type { ParkingPenalty, ParkingStage, DisputeOption } from './shared/parking';
 export type {
   Appointment,
   Consent,
@@ -102,8 +103,13 @@ export interface Fine {
   demeritPoints: number;
   status: FineStatus;
   evidence?: { images: string[]; recordedSpeedKmh?: number; postedLimitKmh?: number; secondsIntoRed?: number };
+  /** APS timeline + penalty-notice number (source 'parking'). */
+  parking?: import('./shared/parking').ParkingPenalty;
+  /** Computed by the API: amount payable now and the APS stage (parking). */
+  amountDue?: number;
+  parkingStage?: import('./shared/parking').ParkingStage;
   paymentId?: string;
-  dispute?: { option: 'early_resolution' | 'trial'; reason: string; submittedAt: string; reference: string };
+  dispute?: { option: import('./shared/parking').DisputeOption; reason: string; submittedAt: string; reference: string };
   vehicle?: Vehicle;
   payment?: Payment;
 }

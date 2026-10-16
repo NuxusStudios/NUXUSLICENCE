@@ -146,7 +146,7 @@ export const api = {
   fine: (id: string) => request<Fine>('GET', `/v1/fines/${id}`),
   payFine: (id: string, body: PaymentInput) => request<{ fine: Fine; payment: Payment }>('POST', `/v1/fines/${id}/pay`, body),
   payAllFines: (body: PaymentInput) => request<{ fines: Fine[]; payment: Payment }>('POST', '/v1/fines/pay-all', body),
-  disputeFine: (id: string, body: { option: 'early_resolution' | 'trial'; reason: string }) =>
+  disputeFine: (id: string, body: { option: import('./types').DisputeOption; reason: string }) =>
     request<Fine>('POST', `/v1/fines/${id}/dispute`, body),
 
   services: () => request<ServiceDefinition[]>('GET', '/v1/services'),
@@ -176,6 +176,8 @@ export const api = {
 
   /** Demo mode only: pretend a red-light camera just recorded one of your plates. */
   simulateCameraTicket: () => request<{ fineId: string; plate: string }>('POST', '/v1/demo/camera-event', {}),
+  simulateParkingTicket: () => request<{ fineId: string; plate: string }>('POST', '/v1/demo/parking-event', {}),
+  addParkingTicket: (penaltyNoticeNumber: string) => request<{ outcome: string; fine: Fine }>('POST', '/v1/parking/lookup', { penaltyNoticeNumber }),
 
   /** Demo mode only: pretend MTO reported a new status for your licence. */
   setDemoLicenceStatus: (code: import('./types').MtoLicenceStatus) =>

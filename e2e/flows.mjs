@@ -141,6 +141,20 @@ await step('camera event from the processing centre lands on the owner account',
   await shot('10-inbox-new-camera-ticket');
 });
 
+await step('parking ticket pushed by the municipality shows APS timeline', async () => {
+  const res = await fetch(`${API}/v1/integrations/parking-events`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': 'dev-camera-integration-key' },
+    body: JSON.stringify({ penaltyNoticeNumber: `E2E-PK-${Date.now()}1`, plate: 'CVPS123', jurisdiction: 'ON', offence: 'Stop in a no-stopping zone', bylaw: 'Parking by-law — no stopping', location: '55 Example Ave', municipality: 'Ottawa', issuedAt: new Date().toISOString(), earlyAmount: 55, setFine: 75 }),
+  });
+  const body = await res.json();
+  if (body.results[0].outcome !== 'created') throw new Error(JSON.stringify(body));
+  await page.goto(`${APP}/fine/${body.results[0].fineId}`);
+  await text('Penalty notice #', { exact: false }).waitFor();
+  await text('Early-payment period').waitFor();
+  await shot('10b-parking-aps');
+});
+
 await step('tickets tab lists open tickets incl. overdue warning', async () => {
   await page.goto(`${APP}/fines`);
   await text('Overdue tickets block plate renewal.').waitFor();

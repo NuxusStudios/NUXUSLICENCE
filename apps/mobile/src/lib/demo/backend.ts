@@ -13,6 +13,7 @@
 
 import { base64url, fromBase64url, sha256Hex } from './hash';
 import { buildLicenceStatus, isAdverseChange, shouldRefresh, type LicenceStatusResult, type MtoLicenceStatus } from '../shared/licence-status';
+import { canRequestScreening, disputeOptionsFor, parkingAmountDue, parkingStage, parkingTimeline } from '../shared/parking';
 import {
   FAQ,
   LOCATIONS,
@@ -173,7 +174,7 @@ function seed() {
     { id: 'fine_rlc_1', externalId: 'JPC-RLC-2026-000187', source: 'red_light_camera', liability: 'owner', personId: 'per_alex', vehicleId: 'veh_alex_car', plate: 'CVPS 123', offence: 'Fail to stop for red light — vehicle owner (camera)', statute: 'Highway Traffic Act — red light camera, owner liability', location: 'Example Ave & Sample St (northbound)', municipality: 'Toronto', occurredAt: iso(-6), issuedAt: iso(-3), dueDate: iso(12), ...totals(325), demeritPoints: 0, status: 'outstanding', evidence: { images: ['evidence://a', 'evidence://b'], secondsIntoRed: 1.4 } },
     { id: 'fine_officer_1', externalId: 'POA-4471-889120', source: 'officer_issued', liability: 'driver', personId: 'per_alex', offence: 'Speeding — 72 km/h in a 50 km/h zone', statute: 'Highway Traffic Act s.128', location: 'Lakeshore Example Blvd W', municipality: 'Toronto', occurredAt: iso(-20), issuedAt: iso(-20), dueDate: iso(-5), ...totals(95), demeritPoints: 3, status: 'outstanding' },
     { id: 'fine_ase_1', externalId: 'JPC-ASE-2025-104552', source: 'speed_camera', liability: 'owner', personId: 'per_alex', vehicleId: 'veh_alex_car', plate: 'CVPS 123', offence: 'Speeding 51 km/h in a 40 km/h zone — vehicle owner (camera)', statute: 'Highway Traffic Act s.128 — automated speed enforcement, owner liability', location: 'Sample Rd near Example Public School (community safety zone)', municipality: 'Toronto', occurredAt: '2025-10-02T14:12:00.000Z', issuedAt: '2025-10-09T10:00:00.000Z', dueDate: '2025-10-24T10:00:00.000Z', ...totals(50), demeritPoints: 0, status: 'paid', evidence: { images: ['evidence://c'], recordedSpeedKmh: 51, postedLimitKmh: 40 }, paymentId: 'pay_hist_1' },
-    { id: 'fine_parking_1', externalId: 'PKG-TOR-77810023', source: 'parking', liability: 'owner', personId: 'per_alex', vehicleId: 'veh_alex_bike', plate: '7AB12', offence: 'Park in a prohibited area during prohibited times', statute: 'Municipal parking by-law', location: '200 Sample Street', municipality: 'Toronto', occurredAt: iso(-2), issuedAt: iso(-2), dueDate: iso(13), setFine: 50, victimFineSurcharge: 0, courtCosts: 0, total: 50, demeritPoints: 0, status: 'outstanding' },
+    { id: 'fine_parking_1', externalId: 'PKG-TOR-77810023', source: 'parking', liability: 'owner', personId: 'per_alex', vehicleId: 'veh_alex_bike', plate: '7AB12', offence: 'Park in a prohibited area during prohibited times', statute: 'Municipal parking by-law', location: '200 Sample Street', municipality: 'Toronto', occurredAt: iso(-2), issuedAt: iso(-2), dueDate: iso(43), setFine: 55, victimFineSurcharge: 0, courtCosts: 0, total: 55, demeritPoints: 0, status: 'outstanding', parking: parkingTimeline({ penaltyNoticeNumber: 'PKG-TOR-77810023', earlyAmount: 40, setFine: 55, issuedAt: iso(-2) }) },
   ];
   for (const f of seeded) fines.set(f.id, f);
 
@@ -205,7 +206,8 @@ const norm = (s: string) => s.replace(/[^A-Z0-9]/gi, '').toUpperCase();
 function status(f: FineRec): Fine['status'] {
   return f.status === 'outstanding' && new Date(f.dueDate) < new Date() ? 'overdue' : f.status;
 }
-const fineView = (f: FineRec): Fine => ({ ...f, status: status(f) });
+const fineView = (f: FineRec): Fine => (f.source === 'parking' && f.parking ? { ...f, status: status(f), amountDue: parkingAmountDue(f.parking), parkingStage: parkingStage(f.parking) } : { ...f, status: status(f) });
+const chargeAmount = (f: FineRec) => (f.source === 'parking' && f.parking ? parkingAmountDue(f.parking) : f.total);
 const finesOf = (personId: string) => [...fines.values()].filter((f) => f.personId === personId).sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
 const inboxOf = (accountId: string) => [...inbox.values()].filter((m) => m.accountId === accountId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
@@ -442,6 +444,58 @@ function simulateCameraTicket(a: Account) {
   return { fineId: fine.id, plate: vehicle.plate };
 }
 
+const PARKING_OFFENCES = [
+  { offence: 'Park on a street during a prohibited time', bylaw: 'Parking by-law — prohibited time', setFine: 55, early: 40 },
+  { offence: 'Stop in a no-stopping zone', bylaw: 'Parking by-law — no stopping', setFine: 75, early: 55 },
+  { offence: 'Exceed the posted time limit', bylaw: 'Parking by-law — time limit', setFine: 40, early: 30 },
+  { offence: 'Park within 3 metres of a fire hydrant', bylaw: 'Parking by-law — fire hydrant', setFine: 105, early: 85 },
+];
+
+/** Demo: a municipality pushes a parking ticket to one of the user's plates (it "just shows up"). */
+function simulateParkingTicket(a: Account) {
+  const vehicle = [...vehicles.values()].find((v) => v.ownerPersonId === a.personId);
+  if (!vehicle) return fail(409, 'no_vehicle', 'You have no registered vehicle to ticket.');
+  const o = PARKING_OFFENCES[Math.floor(Math.random() * PARKING_OFFENCES.length)]!;
+  const issuedAt = new Date().toISOString();
+  const penaltyNoticeNumber = ref('PK-OTT');
+  const fine: FineRec = {
+    id: newId('fine'), externalId: penaltyNoticeNumber, source: 'parking', liability: 'owner', personId: vehicle.ownerPersonId,
+    vehicleId: vehicle.id, plate: vehicle.plate, offence: o.offence, statute: o.bylaw,
+    location: `${100 + Math.floor(Math.random() * 900)} Sample Street`, municipality: 'Ottawa', occurredAt: issuedAt, issuedAt,
+    dueDate: parkingTimeline({ penaltyNoticeNumber, earlyAmount: o.early, setFine: o.setFine, issuedAt }).screeningReviewBy,
+    setFine: o.setFine, victimFineSurcharge: 0, courtCosts: 0, total: o.setFine, demeritPoints: 0, status: 'outstanding',
+    parking: parkingTimeline({ penaltyNoticeNumber, earlyAmount: o.early, setFine: o.setFine, issuedAt }),
+  };
+  fines.set(fine.id, fine);
+  notify(a.id, { category: 'fine', title: 'New parking ticket', body: `Plate ${vehicle.plate} — ${o.offence}. Pay $${o.early.toFixed(2)} (early-payment amount).`, link: `/fine/${fine.id}` });
+  return { fineId: fine.id, plate: vehicle.plate };
+}
+
+/** Add a ticket by its penalty-notice number (gtechna-style lookup). Numbers ending in 0 are "not found". */
+function addParkingByNumber(a: Account, penaltyNoticeNumber: string) {
+  const key = penaltyNoticeNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (!key) return fail(400, 'validation_error', 'Enter the penalty notice number.');
+  const dup = [...fines.values()].find((f) => f.externalId === penaltyNoticeNumber && f.personId === a.personId);
+  if (dup) return { outcome: 'duplicate', fine: fineView(dup) };
+  if (key.endsWith('0')) return fail(404, 'ticket_not_found', 'No parking ticket matches that number.');
+  const vehicle = [...vehicles.values()].find((v) => v.ownerPersonId === a.personId);
+  let h = 0;
+  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const o = PARKING_OFFENCES[h % PARKING_OFFENCES.length]!;
+  const issuedAt = iso(-((h % 5) + 1));
+  const fine: FineRec = {
+    id: newId('fine'), externalId: penaltyNoticeNumber, source: 'parking', liability: 'owner', personId: a.personId,
+    vehicleId: vehicle?.id, plate: vehicle?.plate, offence: o.offence, statute: o.bylaw,
+    location: `${100 + (h % 900)} Sample Street`, municipality: 'Ottawa', occurredAt: issuedAt, issuedAt,
+    dueDate: parkingTimeline({ penaltyNoticeNumber, earlyAmount: o.early, setFine: o.setFine, issuedAt }).screeningReviewBy,
+    setFine: o.setFine, victimFineSurcharge: 0, courtCosts: 0, total: o.setFine, demeritPoints: 0, status: 'outstanding',
+    parking: parkingTimeline({ penaltyNoticeNumber, earlyAmount: o.early, setFine: o.setFine, issuedAt }),
+  };
+  fines.set(fine.id, fine);
+  notify(a.id, { category: 'fine', title: 'Parking ticket added', body: `${o.offence} — Ottawa.`, link: `/fine/${fine.id}` });
+  return { outcome: 'created', fine: fineView(fine) };
+}
+
 // ---------------------------------------------------------------------------
 // router
 // ---------------------------------------------------------------------------
@@ -636,6 +690,10 @@ function route(method: string, path: string, body: Body, token: string | null): 
       return { path: a.savedSignature ?? null };
     case 'POST /demo/camera-event':
       return simulateCameraTicket(a);
+    case 'POST /demo/parking-event':
+      return simulateParkingTicket(a);
+    case 'POST /parking/lookup':
+      return addParkingByNumber(a, String(body?.penaltyNoticeNumber ?? ''));
 
     case 'GET /wallet':
       refreshLicence(a);
@@ -714,7 +772,7 @@ function route(method: string, path: string, body: Body, token: string | null): 
       if (!f || f.personId !== a.personId) fail(404, 'not_found', 'Fine not found');
       const st = status(f!);
       if (st !== 'outstanding' && st !== 'overdue') fail(409, 'not_payable', `Fine is ${st}`);
-      const p = takePayment(a, 'fine', f!.id, f!.total, `Ticket ${f!.externalId}`, body);
+      const p = takePayment(a, 'fine', f!.id, chargeAmount(f!), `Ticket ${f!.externalId}`, body);
       f!.status = 'paid';
       f!.paymentId = p.id;
       notify(a.id, { category: 'fine', title: 'Payment received', body: `Receipt ${p.receiptNumber}: $${p.amount.toFixed(2)} for ticket ${f!.externalId}.`, link: `/fine/${f!.id}` });
@@ -723,12 +781,20 @@ function route(method: string, path: string, body: Body, token: string | null): 
     case 'POST /fines/:id/dispute': {
       const f = fines.get(id!);
       if (!f || f.personId !== a.personId) fail(404, 'not_found', 'Fine not found');
-      const st = status(f!);
-      if (st !== 'outstanding') fail(409, 'not_disputable', st === 'overdue' ? 'The response period has ended' : `Fine is ${st}`);
       if (String(body?.reason ?? '').trim().length < 10) fail(400, 'validation_error', 'Please give a reason of at least 10 characters.');
+      const allowed = new Set(disputeOptionsFor(f!.source).map((o) => o.option));
+      if (!allowed.has(body!.option)) fail(400, 'invalid_option', 'That response option does not apply to this ticket.');
+      if (f!.source === 'parking' && f!.parking) {
+        if (['paid', 'disputed', 'cancelled'].includes(f!.status)) fail(409, 'not_disputable', `Fine is ${f!.status}`);
+        if (!canRequestScreening(f!.parking)) fail(409, 'screening_closed', 'The screening-review window has closed.');
+      } else if (status(f!) !== 'outstanding') {
+        fail(409, 'not_disputable', status(f!) === 'overdue' ? 'The response period has ended' : `Fine is ${status(f!)}`);
+      }
       f!.status = 'disputed';
       f!.dispute = { option: body!.option, reason: body!.reason, submittedAt: now.toISOString(), reference: ref('DSP') };
-      notify(a.id, { category: 'fine', title: body!.option === 'trial' ? 'Trial requested' : 'Early resolution meeting requested', body: `Reference ${f!.dispute.reference}. The court office will notify you here with your date.`, link: `/fine/${f!.id}` });
+      const titles: Record<string, string> = { trial: 'Trial requested', early_resolution: 'Early resolution meeting requested', screening_review: 'Screening review requested', hearing: 'Hearing requested' };
+      const office = body!.option === 'screening_review' || body!.option === 'hearing' ? 'penalty office' : 'court office';
+      notify(a.id, { category: 'fine', title: titles[body!.option] ?? 'Response submitted', body: `Reference ${f!.dispute.reference}. The ${office} will notify you here with your date.`, link: `/fine/${f!.id}` });
       return fineView(f!);
     }
 

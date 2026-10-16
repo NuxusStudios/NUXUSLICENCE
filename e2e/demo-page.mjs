@@ -90,6 +90,31 @@ await step('licence status is live and reacts to an MTO change', async () => {
   await text('This licence is valid and in good standing.').waitFor();
   await back();
 });
+await step('parking ticket: APS timeline and screening-review options', async () => {
+  await app.getByRole('tab', { name: /Tickets/ }).click();
+  await btn('Simulate a parking ticket').click();
+  await text('View ticket').waitFor();
+  await btn('View ticket').click();
+  await text('Penalty notice #', { exact: false }).waitFor();
+  await text('Early-payment period').waitFor();
+  await shot('14-parking-aps');
+  // Opens the APS response screen (screening review, not a POA trial).
+  await btn('Request a screening review').click();
+  await text('Administrative Penalty System', { exact: false }).waitFor();
+  await shot('15-parking-screening');
+  // Leave the modal and return to the Tickets tab.
+  await back();
+  await back();
+  await app.getByRole('tab', { name: /Tickets/ }).click();
+});
+await step('add a paper parking ticket by its number', async () => {
+  await btn('Add by number').click();
+  await app.getByLabel(/Penalty Notice/).fill('OTT-55512347');
+  await btn('Look up and add').click();
+  await text('Penalty notice #', { exact: false }).waitFor();
+  await shot('16-parking-by-number');
+  await back();
+});
 await step('simulate a red-light camera ticket and open it', async () => {
   await app.getByRole('tab', { name: /Tickets/ }).click();
   await btn('Simulate a red light camera ticket').click();

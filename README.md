@@ -28,6 +28,7 @@ docs/       Sanad research, architecture, Ontario legal/policy notes, store rele
 | **Services** | Renew licence, change address (updates every document at once), driver record, road test, ownership transfer, accessible parking permit, health card renewal. |
 | **Home dashboard** | Sanad-style widgets: what needs your attention, favourite cards, quick access, tickets with Pay all, favourite services, next appointment. |
 | **Live licence status** | The driver's-licence status (Valid / Not valid / Expired, plus conditions like ignition interlock) refreshes automatically from the MTO driver record on every app open — no re-entering your licence. A change to a bad status alerts you. See [docs/LICENCE-STATUS.md](docs/LICENCE-STATUS.md). |
+| **Parking tickets (APS)** | Municipal parking tickets *just show up* on the registered owner's account by plate; a paper ticket can be added by its penalty-notice number. The Administrative Penalty System timeline is modelled (early-payment amount + deadline, set fine, overdue, screening-review window), Pay charges the right amount for the stage, and disputes use the APS screening review / hearing. See [docs/PARKING-TICKETS.md](docs/PARKING-TICKETS.md). |
 | **Services directory** | By category or organization, with a service card (channels, fees, steps, conditions, documents) and a step-by-step application. |
 | **My requests** | Every request with its status (in review, awaiting payment, action required, completed…), timeline, pay later, cancel, resubmit. |
 | **Appointments** | Book ServiceOntario or DriveTest visits, acknowledge requirements, check in for a queue ticket. |
@@ -89,7 +90,7 @@ The ticket appears in the demo user's **Tickets** tab and **Inbox** right away.
 ## Checks
 
 ```bash
-cd apps/api && npm test            # 61 API tests (auth, camera matching, payments, requests, appointments, consents, plates…)
+cd apps/api && npm test            # 70 API tests (auth, camera matching, payments, requests, appointments, consents, plates…)
 node scripts/sync-shared.mjs       # after editing packages/shared (a test fails if the copies drift)
 cd apps/api && npm run typecheck
 cd apps/mobile && npm run typecheck && npm run lint

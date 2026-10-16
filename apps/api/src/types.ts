@@ -104,12 +104,15 @@ export interface Fine {
   demeritPoints: number;
   status: FineStatus;
   evidence?: { images: string[]; recordedSpeedKmh?: number; postedLimitKmh?: number; secondsIntoRed?: number };
+  /** APS timeline + penalty-notice number for source 'parking'. */
+  parking?: import('./shared/parking.js').ParkingPenalty;
   paymentId?: string;
   dispute?: Dispute;
 }
 
 export interface Dispute {
-  option: 'early_resolution' | 'trial';
+  /** POA court (camera/officer): early_resolution|trial. APS parking: screening_review|hearing. */
+  option: import('./shared/parking.js').DisputeOption;
   reason: string;
   submittedAt: string;
   reference: string;

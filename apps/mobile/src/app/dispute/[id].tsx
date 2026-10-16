@@ -5,25 +5,36 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, Field, IconTile, Notice, PressScale, Screen, Txt, type IconName } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
+import { disputeOptionsFor, type DisputeOption } from '../../lib/shared/parking';
 import { radius, space, useTheme } from '../../lib/theme';
+import { useAsync } from '../../lib/useAsync';
+
+const ICON: Record<DisputeOption, IconName> = { early_resolution: 'people', trial: 'hammer', screening_review: 'search', hearing: 'hammer' };
 
 export default function Dispute() {
-  const params = useLocalSearchParams<{ id: string; option?: string }>();
+  const params = useLocalSearchParams<{ id: string; option?: string; source?: string }>();
   const id = params.id;
   const c = useTheme();
-  const { t } = useI18n();
-  const [option, setOption] = useState<'early_resolution' | 'trial'>(params.option === 'trial' ? 'trial' : 'early_resolution');
+  const { t, tr, pick } = useI18n();
+  // Source comes from the fine screen; for a deep link we look it up.
+  const fine = useAsync(() => api.fine(id), id);
+  const source = params.source ?? fine.data?.source;
+  const choices = disputeOptionsFor(source ?? 'parking');
+  const [option, setOption] = useState<DisputeOption | undefined>(params.option as DisputeOption | undefined);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [reference, setReference] = useState<string>();
+  const parking = source === 'parking';
+  // Default/validate the selected option once we know the ticket's options.
+  const selected = option && choices.some((o) => o.option === option) ? option : choices[0]!.option;
 
   async function submit() {
     setBusy(true);
     setError(undefined);
     try {
-      const fine = await api.disputeFine(id, { option, reason });
-      setReference(fine.dispute?.reference);
+      const disputed = await api.disputeFine(id, { option: selected, reason });
+      setReference(disputed.dispute?.reference);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -42,30 +53,45 @@ export default function Dispute() {
           <Txt v="mono" muted>
             {reference}
           </Txt>
+          <Txt v="caption" muted style={{ textAlign: 'center' }}>
+            {parking
+              ? tr('The penalty office will notify you here with your date.', 'Le bureau des pénalités vous informera ici de votre date.')
+              : tr('The court office will notify you here with your date.', 'Le bureau du tribunal vous informera ici de votre date.')}
+          </Txt>
         </View>
         <Button title={t('done')} onPress={() => router.back()} />
       </Screen>
     );
   }
 
-  const choices: { key: 'early_resolution' | 'trial'; icon: IconName; title: string; body: string }[] = [
-    { key: 'early_resolution', icon: 'people', title: t('earlyResolution'), body: t('earlyResolutionBody') },
-    { key: 'trial', icon: 'hammer', title: t('trial'), body: t('trialBody') },
-  ];
+  if (!source && fine.loading) {
+    return (
+      <Screen>
+        <Txt v="title" accessibilityRole="header">
+          {t('disputeTitle')}
+        </Txt>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
       <Txt v="title" accessibilityRole="header">
-        {t('disputeTitle')}
+        {parking ? tr('Respond to this penalty', 'Répondre à cette pénalité') : t('disputeTitle')}
       </Txt>
+      {parking && (
+        <Notice tone="info">
+          {tr('Parking tickets follow the Administrative Penalty System: ask for a screening review first, then a hearing.', 'Les contraventions de stationnement relèvent du système de pénalités administratives : demandez d’abord une révision, puis une audience.')}
+        </Notice>
+      )}
       {choices.map((ch) => {
-        const on = option === ch.key;
+        const on = selected === ch.option;
         return (
           <PressScale
-            key={ch.key}
-            onPress={() => setOption(ch.key)}
+            key={ch.option}
+            onPress={() => setOption(ch.option)}
             accessibilityRole="radio"
-            accessibilityLabel={ch.title}
+            accessibilityLabel={pick(ch.label)}
             accessibilityState={{ checked: on }}
             scaleTo={0.985}
             style={{
@@ -78,11 +104,11 @@ export default function Dispute() {
               backgroundColor: on ? c.primarySoft : c.surface,
             }}
           >
-            <IconTile icon={ch.icon} />
+            <IconTile icon={ICON[ch.option]} />
             <View style={{ flex: 1, gap: 4 }}>
-              <Txt v="strong">{ch.title}</Txt>
+              <Txt v="strong">{pick(ch.label)}</Txt>
               <Txt v="caption" muted>
-                {ch.body}
+                {pick(ch.body)}
               </Txt>
             </View>
             <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={on ? c.accent : c.textFaint} />

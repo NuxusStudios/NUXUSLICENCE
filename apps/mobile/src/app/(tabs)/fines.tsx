@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { router } from 'expo-router';
 import { FineRow } from '../../components/FineRow';
 import { Chip, ChipRow } from '../../components/kit';
-import { Body, Button, Card, Divider, Empty, ErrorState, IconTile, Loading, Notice, Screen, Segmented, SectionHeader, Txt } from '../../components/ui';
+import { Body, Button, Card, Divider, Empty, ErrorState, Field, IconTile, Loading, Notice, Screen, Segmented, SectionHeader, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { DEMO_MODE } from '../../lib/config';
 import { money } from '../../lib/format';
@@ -64,20 +64,73 @@ export default function Fines() {
           <Empty icon="checkmark-done" text={t('noFines')} />
         )}
       </Card>
+      <AddParkingTicket onAdded={reload} />
       {DEMO_MODE && <SimulateTicket onCreated={reload} accent={c.accent} />}
     </Screen>
   );
 }
 
+/** Add a parking ticket by its penalty-notice number (gtechna-style lookup). */
+function AddParkingTicket({ onAdded }: { onAdded: () => Promise<void> }) {
+  const { tr } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [number, setNumber] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function add() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const res = await api.addParkingTicket(number.trim());
+      await onAdded();
+      setOpen(false);
+      setNumber('');
+      router.push(`/fine/${res.fine.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <SectionHeader>{tr('Have a paper ticket?', 'Vous avez un billet papier?')}</SectionHeader>
+      <Card style={{ gap: space.md }}>
+        <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'flex-start' }}>
+          <IconTile icon="document-text" />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Txt v="strong">{tr('Add a parking ticket', 'Ajouter une contravention de stationnement')}</Txt>
+            <Body muted style={{ fontSize: 14, lineHeight: 20 }}>
+              {tr('Camera and plate-matched tickets appear here automatically. For a paper ticket, enter the penalty notice number.', 'Les contraventions de caméra et liées à la plaque apparaissent ici automatiquement. Pour un billet papier, entrez le numéro d’avis de pénalité.')}
+            </Body>
+          </View>
+        </View>
+        {open ? (
+          <>
+            <Field label={tr('Penalty Notice/Order #', 'Avis de pénalité/ordonnance nº')} value={number} onChangeText={setNumber} autoCapitalize="characters" placeholder="OTT-55512347" />
+            {error && <Notice tone="danger">{error}</Notice>}
+            <Button title={tr('Look up and add', 'Rechercher et ajouter')} icon="search" onPress={add} loading={busy} disabled={number.trim().length < 3} />
+            <Button title={tr('Cancel', 'Annuler')} variant="ghost" size="md" onPress={() => { setOpen(false); setError(undefined); }} />
+          </>
+        ) : (
+          <Button title={tr('Add by number', 'Ajouter par numéro')} variant="secondary" size="md" icon="add" onPress={() => setOpen(true)} />
+        )}
+      </Card>
+    </>
+  );
+}
+
 function SimulateTicket({ onCreated }: { onCreated: () => Promise<void>; accent: string }) {
-  const { t } = useI18n();
+  const { t, tr } = useI18n();
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<{ fineId: string; plate: string }>();
 
-  async function simulate() {
+  async function simulate(kind: 'camera' | 'parking') {
     setBusy(true);
     try {
-      setCreated(await api.simulateCameraTicket());
+      setCreated(await (kind === 'camera' ? api.simulateCameraTicket() : api.simulateParkingTicket()));
       await onCreated();
     } finally {
       setBusy(false);
@@ -103,7 +156,8 @@ function SimulateTicket({ onCreated }: { onCreated: () => Promise<void>; accent:
           </Notice>
         )}
         {created && <Button title={t('viewTicket')} variant="secondary" size="md" onPress={() => router.push(`/fine/${created.fineId}`)} />}
-        <Button title={t('simulateTicket')} icon="videocam" onPress={simulate} loading={busy} />
+        <Button title={t('simulateTicket')} icon="videocam" onPress={() => simulate('camera')} loading={busy} />
+        <Button title={tr('Simulate a parking ticket', 'Simuler une contravention de stationnement')} variant="secondary" icon="document-text" onPress={() => simulate('parking')} loading={busy} />
       </Card>
     </>
   );

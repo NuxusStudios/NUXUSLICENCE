@@ -50,6 +50,9 @@ export class Store {
   unmatchedCameraEvents: UnmatchedCameraEvent[] = [];
   /** Idempotency: upstream camera event id -> fine id. */
   processedCameraEvents = new Map<string, string>();
+  /** Idempotency: parking penalty-notice number -> fine id. */
+  processedParkingEvents = new Map<string, string>();
+  unmatchedParkingEvents: { event: import('./parking.js').ParkingEvent; reason: 'plate_not_found' | 'out_of_province'; receivedAt: string }[] = [];
   /** Revoked presentation token ids (e.g. device reported lost). */
   revokedPresentationIds = new Set<string>();
   /** Accounts whose wallet was remotely wiped; presentations issued before this time are rejected. */

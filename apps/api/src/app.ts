@@ -18,6 +18,8 @@ import {
 } from './crypto.js';
 import { effectiveStatus, ingestCameraEvent } from './fines.js';
 import { getLicenceStatusProvider, DemoLicenceStatusProvider } from './licence-status.js';
+import { addTicketByNumber, ingestParkingEvent } from './parking.js';
+import { canRequestScreening, disputeOptionsFor, parkingAmountDue, parkingStage, type DisputeOption } from './shared/parking.js';
 import { buildLicenceStatus, isAdverseChange, licenceStatusMessage, shouldRefresh, type LicenceStatus, type MtoLicenceStatus } from './shared/licence-status.js';
 import { notify } from './notifications.js';
 import { charge } from './payments.js';
@@ -98,6 +100,19 @@ const cameraEventSchema = z.object({
   setFine: z.number().positive(),
 });
 
+const parkingEventSchema = z.object({
+  penaltyNoticeNumber: z.string().min(3).max(40),
+  plate: z.string().min(2).max(10),
+  jurisdiction: z.string().length(2),
+  offence: z.string().min(1),
+  bylaw: z.string().min(1),
+  location: z.string().min(1),
+  municipality: z.string().min(1),
+  issuedAt: z.iso.datetime(),
+  earlyAmount: z.number().positive(),
+  setFine: z.number().positive(),
+});
+
 /** Who may see which fields when a credential is presented. */
 const DISCLOSURES = ['full', 'age_over_19', 'age_over_18', 'name_photo', 'licence_status'] as const;
 type Disclosure = (typeof DISCLOSURES)[number];
@@ -164,8 +179,15 @@ export async function buildApp(opts: AppOptions = {}) {
   }
 
   function serializeFine(f: Fine) {
-    return { ...f, status: effectiveStatus(f) };
+    const base = { ...f, status: effectiveStatus(f) };
+    if (f.source === 'parking' && f.parking) {
+      return { ...base, amountDue: parkingAmountDue(f.parking), parkingStage: parkingStage(f.parking) };
+    }
+    return base;
   }
+
+  /** Amount to charge for a ticket now (APS parking uses the time-based amount). */
+  const amountToCharge = (f: Fine) => (f.source === 'parking' && f.parking ? parkingAmountDue(f.parking) : f.total);
 
   function ownedRequest(req: FastifyRequest, id: string): ServiceRequest {
     const r = store.serviceRequests.get(id);
@@ -628,6 +650,19 @@ export async function buildApp(opts: AppOptions = {}) {
     return store.unmatchedCameraEvents;
   });
 
+  // Municipal parking enforcement pushes issued tickets by plate -> owner.
+  app.post('/v1/integrations/parking-events', async (req, reply) => {
+    requireIntegrationKey(req);
+    const body = z.union([parkingEventSchema, z.object({ events: z.array(parkingEventSchema).min(1).max(500) })]).parse(req.body);
+    const events = 'events' in body ? body.events : [body];
+    const results = events.map((e) => ({ penaltyNoticeNumber: e.penaltyNoticeNumber, ...ingestParkingEvent(store, e) }));
+    return reply.status(202).send({ results });
+  });
+  app.get('/v1/integrations/parking-events/unmatched', async (req) => {
+    requireIntegrationKey(req);
+    return store.unmatchedParkingEvents;
+  });
+
   // -------------------------------------------------------------------------
   // authenticated citizen API
   // -------------------------------------------------------------------------
@@ -771,7 +806,7 @@ export async function buildApp(opts: AppOptions = {}) {
       const body = paymentInput.parse(req.body);
       const status = effectiveStatus(f);
       if (status !== 'outstanding' && status !== 'overdue') throw new HttpError(409, 'not_payable', `Fine is ${status}`);
-      const payment = await takePayment(req, { purpose: 'fine', referenceId: f.id, amount: f.total, label: `Ticket ${f.externalId}` }, body, reply);
+      const payment = await takePayment(req, { purpose: 'fine', referenceId: f.id, amount: amountToCharge(f), label: `Ticket ${f.externalId}` }, body, reply);
       if (!payment) return reply;
       f.status = 'paid';
       f.paymentId = payment.id;
@@ -784,7 +819,7 @@ export async function buildApp(opts: AppOptions = {}) {
       const body = paymentInput.parse(req.body);
       const open = store.finesFor(me(req).personId).filter((f) => ['outstanding', 'overdue'].includes(effectiveStatus(f)));
       if (!open.length) throw new HttpError(409, 'nothing_to_pay', 'No open tickets.');
-      const amount = open.reduce((s, f) => s + f.total, 0);
+      const amount = open.reduce((s, f) => s + amountToCharge(f), 0);
       const payment = await takePayment(req, { purpose: 'fine', referenceId: open.map((f) => f.id).join(','), amount, label: `${open.length} tickets` }, body, reply);
       if (!payment) return reply;
       for (const f of open) {
@@ -797,18 +832,42 @@ export async function buildApp(opts: AppOptions = {}) {
 
     secure.post<{ Params: { id: string } }>('/v1/fines/:id/dispute', async (req) => {
       const f = ownedFine(req, req.params.id);
-      const body = z.object({ option: z.enum(['early_resolution', 'trial']), reason: z.string().min(10).max(2000) }).parse(req.body);
+      const body = z.object({ option: z.enum(['early_resolution', 'trial', 'screening_review', 'hearing'] as const satisfies readonly DisputeOption[]), reason: z.string().min(10).max(2000) }).parse(req.body);
+      const allowed = new Set(disputeOptionsFor(f.source).map((o) => o.option));
+      if (!allowed.has(body.option)) throw new HttpError(400, 'invalid_option', 'That response option does not apply to this ticket.');
       const status = effectiveStatus(f);
-      if (status !== 'outstanding') throw new HttpError(409, 'not_disputable', status === 'overdue' ? 'The response period has ended' : `Fine is ${status}`);
+      // Parking (APS) can still request a screening review after the early-payment period, up to the 45-day deadline.
+      if (f.source === 'parking' && f.parking) {
+        if (f.status === 'paid' || f.status === 'disputed' || f.status === 'cancelled') throw new HttpError(409, 'not_disputable', `Fine is ${f.status}`);
+        if (!canRequestScreening(f.parking)) throw new HttpError(409, 'screening_closed', 'The screening-review window has closed.');
+      } else if (status !== 'outstanding') {
+        throw new HttpError(409, 'not_disputable', status === 'overdue' ? 'The response period has ended' : `Fine is ${status}`);
+      }
       f.status = 'disputed';
       f.dispute = { ...body, submittedAt: new Date().toISOString(), reference: referenceNumber('DSP') };
+      const titles: Record<DisputeOption, string> = { trial: 'Trial requested', early_resolution: 'Early resolution meeting requested', screening_review: 'Screening review requested', hearing: 'Hearing requested' };
+      const office = body.option === 'screening_review' || body.option === 'hearing' ? 'penalty office' : 'court office';
       notify(store, me(req), {
         category: 'fine',
-        title: body.option === 'trial' ? 'Trial requested' : 'Early resolution meeting requested',
-        body: `Reference ${f.dispute.reference}. The court office will notify you here with your date.`,
+        title: titles[body.option],
+        body: `Reference ${f.dispute.reference}. The ${office} will notify you here with your date.`,
         link: `/fine/${f.id}`,
       });
       return serializeFine(f);
+    });
+
+    /**
+     * Add a parking ticket by its penalty-notice number — the manual path for
+     * a ticket the user already holds (what gtechna's search does). Owner-
+     * matched to one of the user's plates.
+     */
+    secure.post('/v1/parking/lookup', async (req, reply) => {
+      const { penaltyNoticeNumber } = z.object({ penaltyNoticeNumber: z.string().min(3).max(40) }).parse(req.body);
+      const result = await addTicketByNumber(store, me(req).personId, penaltyNoticeNumber);
+      if (result.outcome === 'not_found') throw new HttpError(404, 'ticket_not_found', 'No parking ticket matches that number.');
+      if (result.outcome === 'not_your_plate') throw new HttpError(409, 'not_your_plate', 'That ticket is not registered to one of your plates.');
+      const fine = serializeFine(store.fines.get(result.fineId!)!);
+      return reply.status(result.outcome === 'created' ? 201 : 200).send({ outcome: result.outcome, fine });
     });
 
     // --- services and requests ("My requests") -----------------------------

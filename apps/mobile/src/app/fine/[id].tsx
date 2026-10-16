@@ -4,16 +4,18 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fineTone } from '../../components/FineRow';
 import { OffenceNotice } from '../../components/OffenceNotice';
-import { Badge, Button, Card, ErrorState, Loading, Notice, Row, Screen, SectionHeader, Txt } from '../../components/ui';
+import { Badge, Button, Card, Divider, ErrorState, Loading, Notice, Row, Screen, SectionHeader, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { date, money } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
+import { PARKING_STAGE_LABEL, PARKING_STAGE_TONE, canRequestScreening, parkingStageMessage } from '../../lib/shared/parking';
 import { fonts, radius, space, useTheme } from '../../lib/theme';
 import { useAsync } from '../../lib/useAsync';
 
 export default function FineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t, lang } = useI18n();
+  const c = useTheme();
+  const { t, tr, pick, lang } = useI18n();
   const navigation = useNavigation();
   const { data, error, loading, reload } = useAsync(() => api.fine(id), id);
 
@@ -26,6 +28,9 @@ export default function FineScreen() {
   const f = data!;
   const open = f.status === 'outstanding' || f.status === 'overdue';
   const isCamera = f.source === 'red_light_camera' || f.source === 'speed_camera';
+  const isParking = f.source === 'parking';
+  const payAmount = f.amountDue ?? f.total;
+  const screeningOpen = isParking && f.parking ? canRequestScreening(f.parking) : false;
 
   return (
     <Screen refreshing={loading} onRefresh={reload}>
@@ -33,12 +38,38 @@ export default function FineScreen() {
         <Badge label={f.status === 'overdue' ? t('overdue') : t(f.status)} tone={fineTone(f.status)} />
         {open && (
           <Txt v="caption" muted>
-            {t('respondBy')} {date(f.dueDate, lang)}
+            {isParking ? tr('Screening review by', 'Révision avant le') : t('respondBy')} {date(f.dueDate, lang)}
           </Txt>
         )}
       </View>
 
       <OffenceNotice fine={f} />
+
+      {/* APS timeline for parking penalties. */}
+      {isParking && f.parking && (
+        <Card style={{ gap: space.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Txt v="label" muted>
+              {tr('Penalty notice #', 'Avis de pénalité nº')}
+            </Txt>
+            <Txt v="mono" style={{ fontSize: 13 }}>
+              {f.parking.penaltyNoticeNumber}
+            </Txt>
+          </View>
+          <Divider />
+          {f.parkingStage && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' }}>
+              <Badge label={pick(PARKING_STAGE_LABEL[f.parkingStage])} tone={PARKING_STAGE_TONE[f.parkingStage]} />
+              <Txt v="caption" muted style={{ flex: 1 }}>
+                {pick(parkingStageMessage(f.parking))}
+              </Txt>
+            </View>
+          )}
+          <Row label={tr('Early-payment amount', 'Montant du paiement anticipé')} value={`${money(f.parking.earlyAmount, lang)} · ${tr('by', 'avant le')} ${date(f.parking.earlyPaymentUntil, lang)}`} />
+          <Row label={tr('Set fine (after)', 'Amende fixée (après)')} value={money(f.parking.setFine, lang)} />
+          <Row label={tr('Screening review by', 'Révision avant le')} value={date(f.parking.screeningReviewBy, lang)} />
+        </Card>
+      )}
 
       <Notice tone={f.liability === 'owner' ? 'info' : 'warning'}>
         {f.liability === 'owner' ? t('ownerLiability') : `${t('driverLiability')} ${t('demeritPoints')}: ${f.demeritPoints}`}
@@ -51,34 +82,47 @@ export default function FineScreen() {
       )}
       {f.dispute && (
         <Notice tone="info">
-          {f.dispute.option === 'trial' ? t('trial') : t('earlyResolution')} · {t('reference')} {f.dispute.reference}
+          {t('reference')} {f.dispute.reference}
         </Notice>
       )}
 
-      {/* The three responses printed on an offence notice. */}
       {open && (
         <>
-          <SectionHeader>{t('disputeTitle')}</SectionHeader>
+          <SectionHeader>{isParking ? tr('Pay or respond', 'Payer ou répondre') : t('disputeTitle')}</SectionHeader>
           <Card style={{ gap: space.md }}>
-            <OptionHead n={1} title={t('option1Title')} body={t('option1Body')} />
+            <OptionHead n={1} title={t('option1Title')} body={isParking ? tr('Pay the amount shown for this stage.', 'Payez le montant indiqué pour cette étape.') : t('option1Body')} />
+            {isParking && f.parkingStage === 'early_payment' && (
+              <Txt v="caption" color={c.success}>
+                {tr('Early-payment amount — pay before the discount ends.', 'Montant anticipé — payez avant la fin du rabais.')}
+              </Txt>
+            )}
             <Button
-              title={`${t('payNow')} · ${money(f.total, lang)}`}
+              title={`${t('payNow')} · ${money(payAmount, lang)}`}
               icon="card"
-              onPress={() => router.push({ pathname: '/pay', params: { kind: 'fine', id: f.id, amount: String(f.total), label: `${t(f.source)} ${f.externalId}` } })}
+              onPress={() => router.push({ pathname: '/pay', params: { kind: 'fine', id: f.id, amount: String(payAmount), label: `${t(f.source)} ${f.externalId}` } })}
             />
           </Card>
-          {f.status === 'outstanding' && (
-            <>
-              <Card style={{ gap: space.md }}>
-                <OptionHead n={2} title={t('earlyResolution')} body={t('earlyResolutionBody')} />
-                <Button title={t('requestMeeting')} variant="secondary" size="md" icon="people-outline" onPress={() => router.push({ pathname: '/dispute/[id]', params: { id: f.id, option: 'early_resolution' } })} />
-              </Card>
-              <Card style={{ gap: space.md }}>
-                <OptionHead n={3} title={t('trial')} body={t('trialBody')} />
-                <Button title={t('trial')} variant="secondary" size="md" icon="hammer-outline" onPress={() => router.push({ pathname: '/dispute/[id]', params: { id: f.id, option: 'trial' } })} />
-              </Card>
-            </>
-          )}
+
+          {isParking
+            ? screeningOpen &&
+              f.status !== 'disputed' && (
+                <Card style={{ gap: space.md }}>
+                  <OptionHead n={2} title={tr('Dispute this penalty', 'Contester cette pénalité')} body={tr('Request a screening review (within 45 days), then a hearing if needed.', 'Demandez une révision (dans les 45 jours), puis une audience au besoin.')} />
+                  <Button title={tr('Request a screening review', 'Demander une révision')} variant="secondary" size="md" icon="search-outline" onPress={() => router.push({ pathname: '/dispute/[id]', params: { id: f.id, option: 'screening_review', source: f.source } })} />
+                </Card>
+              )
+            : f.status === 'outstanding' && (
+                <>
+                  <Card style={{ gap: space.md }}>
+                    <OptionHead n={2} title={t('earlyResolution')} body={t('earlyResolutionBody')} />
+                    <Button title={t('requestMeeting')} variant="secondary" size="md" icon="people-outline" onPress={() => router.push({ pathname: '/dispute/[id]', params: { id: f.id, option: 'early_resolution', source: f.source } })} />
+                  </Card>
+                  <Card style={{ gap: space.md }}>
+                    <OptionHead n={3} title={t('trial')} body={t('trialBody')} />
+                    <Button title={t('trial')} variant="secondary" size="md" icon="hammer-outline" onPress={() => router.push({ pathname: '/dispute/[id]', params: { id: f.id, option: 'trial', source: f.source } })} />
+                  </Card>
+                </>
+              )}
         </>
       )}
 

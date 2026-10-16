@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Automatic licence-status checking: refresh on open, scheduled sweep, alerts.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
@@ -19,7 +20,7 @@ async function login() {
 }
 const get = (url: string, headers: Record<string, string>) => app.inject({ url, headers });
 const post = (url: string, headers: Record<string, string>, payload: unknown = {}) => app.inject({ method: 'POST', url, headers, payload: payload as object });
-const licence = (wallet: { type: string }[]) => wallet.find((c) => c.type === 'driver_licence') as never;
+const licence = (wallet: any[]) => wallet.find((c: any) => c.type === 'driver_licence');
 
 beforeEach(async () => {
   provider = new DemoLicenceStatusProvider();

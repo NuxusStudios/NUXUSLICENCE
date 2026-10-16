@@ -1,5 +1,6 @@
 import { hashPassword, newId, referenceNumber } from './crypto.js';
 import { defaultPreferences, sampleAppointment, sampleConsents, sampleRequests } from './shared/platform.js';
+import { parkingTimeline } from './shared/parking.js';
 import { addDays, fineTotals } from './fines.js';
 import type { Store } from './store.js';
 import type { Account, Fine } from './types.js';
@@ -203,13 +204,14 @@ export async function seed(store: Store): Promise<void> {
       municipality: 'Toronto',
       occurredAt: iso(-2),
       issuedAt: iso(-2),
-      dueDate: iso(13),
-      setFine: 50,
+      dueDate: iso(43),
+      setFine: 55,
       victimFineSurcharge: 0,
       courtCosts: 0,
-      total: 50,
+      total: 55,
       demeritPoints: 0,
       status: 'outstanding',
+      parking: parkingTimeline({ penaltyNoticeNumber: 'PKG-TOR-77810023', earlyAmount: 40, setFine: 55, issuedAt: iso(-2) }),
     },
   ];
   for (const f of fines) store.fines.set(f.id, f);
