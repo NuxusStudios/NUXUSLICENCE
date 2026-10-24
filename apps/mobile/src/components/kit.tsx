@@ -2,7 +2,7 @@
 // PIN entry, signature pad. Everything bilingual, no system dialogs (they
 // aren't available in every host, e.g. embedded web views).
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -60,6 +60,65 @@ export function Widget({
       {flush ? children : <Card style={{ paddingVertical: space.xs }}>{children}</Card>}
     </View>
   );
+}
+
+/**
+ * A bento-grid tile: large radius, a small uppercase label header, optional
+ * "view all" action, and an optional solid-accent "anchor" treatment. The
+ * building block of the dashboard's bento layout.
+ */
+export function BentoTile({
+  title,
+  action,
+  onAction,
+  onPress,
+  accent,
+  pad = true,
+  children,
+  style,
+}: {
+  title?: string;
+  action?: string;
+  onAction?: () => void;
+  onPress?: () => void;
+  accent?: boolean;
+  pad?: boolean;
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const c = useTheme();
+  const headColor = accent ? c.primaryText : c.textMuted;
+  const tileStyle: StyleProp<ViewStyle> = [styles.bento, { backgroundColor: accent ? c.primary : c.surface, borderColor: accent ? 'transparent' : c.border }, !pad && { padding: 0 }, style];
+  const body = (
+    <>
+      {title || (action && onAction) ? (
+        <View style={styles.bentoHead}>
+          {title ? <Text style={[styles.bentoTitle, { color: headColor, opacity: accent ? 0.85 : 1 }]}>{title}</Text> : <View />}
+          {action && onAction ? (
+            <Pressable onPress={onAction} accessibilityRole="link" hitSlop={8}>
+              <Txt v="strong" color={accent ? c.primaryText : c.accent}>
+                {action}
+              </Txt>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      {children}
+    </>
+  );
+  if (onPress) {
+    return (
+      <PressScale onPress={onPress} style={tileStyle} scaleTo={0.99}>
+        {body}
+      </PressScale>
+    );
+  }
+  return <View style={tileStyle}>{body}</View>;
+}
+
+/** A row of bento tiles that share a line (each child flexes to fill). */
+export function BentoRow({ children }: { children: ReactNode }) {
+  return <View style={styles.bentoRow}>{children}</View>;
 }
 
 /** A square shortcut tile in a grid (Sanad "Quick access"). */
@@ -519,6 +578,10 @@ export function HeaderLink({ icon, label, to }: { icon: IconName; label: string;
 }
 
 const styles = StyleSheet.create({
+  bento: { borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: space.md, overflow: 'hidden' },
+  bentoHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
+  bentoTitle: { fontFamily: fonts.semibold, fontSize: 11.5, letterSpacing: 0.8, textTransform: 'uppercase' },
+  bentoRow: { flexDirection: 'row', gap: space.md },
   widgetHead: { flexDirection: 'row', alignItems: 'flex-end', gap: space.md, paddingHorizontal: 2, marginTop: space.sm },
   tile: { alignItems: 'center', gap: 6, paddingHorizontal: 2, paddingVertical: space.xs },
   tileBadge: { position: 'absolute', top: -4, right: -6, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2 },

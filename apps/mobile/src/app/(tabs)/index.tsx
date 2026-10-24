@@ -3,14 +3,14 @@ import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-n
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
-import { Chip, LicenceStatusPill, Tile, Widget } from '../../components/kit';
-import { Badge, Button, Card, Divider, ErrorState, ListItem, Loading, PressScale, Screen, Txt } from '../../components/ui';
+import { BentoRow, BentoTile, Chip, LicenceStatusPill, Tile } from '../../components/kit';
+import { Badge, Button, Divider, ErrorState, ListItem, Loading, PressScale, Screen, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { money } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
 import { CATEGORY_ICON, serviceHref } from '../../lib/icons';
 import { LOCATIONS, serviceById, visitName } from '../../lib/shared/platform';
-import { fonts, radius, space, useTheme } from '../../lib/theme';
+import { fonts, space, useTheme } from '../../lib/theme';
 import { useAsync } from '../../lib/useAsync';
 
 export default function Home() {
@@ -32,15 +32,16 @@ export default function Home() {
   const favs = preferences.favouriteCards.map((id) => wallet.find((w) => w.id === id)).filter((w) => !!w);
   const licence = wallet.find((w) => w.type === 'driver_licence');
   const cards = favs.length ? favs : wallet;
-  const cardWidth = Math.min(width - 56, 340);
+  const cardWidth = Math.min(width - 72, 320);
   const openRequests = requests.filter((r) => r.status === 'action_required' || r.status === 'awaiting_payment').length;
   const pendingConsents = consents.filter((x) => x.status === 'pending' && !x.expired).length;
   const next = appointments.find((a) => a.status === 'upcoming' || a.status === 'checked_in');
   const nextLoc = next && LOCATIONS.find((l) => l.id === next.locationId);
   const favServices = preferences.favouriteServices.map(serviceById).filter((s) => !!s);
+  const dueColor = summary.overdueFines ? c.danger : c.text;
 
   const bell = (
-    <PressScale onPress={() => router.push('/inbox')} accessibilityLabel={`${t('inbox')}, ${unread}`} style={[styles.bell, { backgroundColor: c.surface, boxShadow: c.shadow, borderColor: c.hairline }]}>
+    <PressScale onPress={() => router.push('/inbox')} accessibilityLabel={`${t('inbox')}, ${unread}`} style={[styles.bell, { backgroundColor: c.surface, borderColor: c.border }]}>
       <Ionicons name="notifications-outline" size={22} color={c.text} />
       {unread > 0 && (
         <View style={[styles.bellDot, { backgroundColor: c.danger, borderColor: c.surface }]}>
@@ -54,22 +55,61 @@ export default function Home() {
 
   return (
     <Screen refreshing={loading} onRefresh={reload} title={`${greeting}, ${person.givenNames.split(' ')[0]}`} subtitle={today.charAt(0).toUpperCase() + today.slice(1)} right={bell}>
-      {/* One quiet line: identity is verified and the licence is live-valid. */}
+      {/* Anchor tile: identity + live licence status, solid accent. */}
       {licence && (
-        <PressScale onPress={() => router.push(`/credential/${licence.id}`)} accessibilityLabel={tr('Driver’s licence status', 'Statut du permis de conduire')} style={[styles.statusRow, { backgroundColor: c.surfaceAlt }]}>
-          <Ionicons name="shield-checkmark" size={18} color={c.success} />
-          <View style={{ flex: 1 }}>
-            <Txt v="strong">{tr('Driver’s licence', 'Permis de conduire')}</Txt>
-            <Txt v="caption" faint>{person.licenceNumber}</Txt>
+        <BentoTile accent onPress={() => router.push(`/credential/${licence.id}`)}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+            <Ionicons name="shield-checkmark" size={22} color={c.primaryText} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: c.primaryText, fontFamily: fonts.bold, fontSize: 16 }}>{tr('Driver’s licence', 'Permis de conduire')}</Text>
+              <Text style={{ color: c.primaryText, opacity: 0.7, fontFamily: fonts.mono, fontSize: 12.5, marginTop: 2 }}>{person.licenceNumber}</Text>
+            </View>
+            <LicenceStatusPill status={licence.licenceStatus} />
+            <Ionicons name="chevron-forward" size={18} color={c.primaryText} style={{ opacity: 0.8 }} />
           </View>
-          <LicenceStatusPill status={licence.licenceStatus} />
-          <Ionicons name="chevron-forward" size={17} color={c.textFaint} />
-        </PressScale>
+        </BentoTile>
       )}
 
-      <Widget title={tr('Needs your attention', 'À faire')}>
+      {/* Paired row: amount due + next visit. */}
+      <BentoRow>
+        <BentoTile title={t('totalDue')} onPress={() => router.push('/fines')} style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={[styles.amount, { color: dueColor }]} accessibilityLabel={hideAmounts ? tr('Amount hidden', 'Montant masqué') : money(summary.openFinesTotal, lang)}>
+              {hideAmounts ? '•••' : money(summary.openFinesTotal, lang)}
+            </Text>
+            <PressScale onPress={() => setHideAmounts((h) => !h)} accessibilityLabel={hideAmounts ? tr('Show', 'Afficher') : tr('Hide', 'Masquer')} style={[styles.eye, { backgroundColor: c.surfaceAlt }]}>
+              <Ionicons name={hideAmounts ? 'eye-outline' : 'eye-off-outline'} size={17} color={c.textMuted} />
+            </PressScale>
+          </View>
+          <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+            <Badge label={`${summary.openFines} ${tr('open', 'en cours')}`} tone={summary.openFines ? 'info' : 'success'} />
+            {summary.overdueFines > 0 && <Badge label={`${summary.overdueFines} ${t('overdue')}`} tone="danger" />}
+          </View>
+        </BentoTile>
+
+        <BentoTile title={tr('Next visit', 'Prochaine visite')} onPress={() => router.push(next ? `/appointments/${next.id}` : '/appointments/book')} style={{ flex: 1 }}>
+          {next && nextLoc ? (
+            <View style={{ gap: 4 }}>
+              <Text style={[styles.monoMd, { color: c.text }]}>{next.time}</Text>
+              <Txt v="caption" muted numberOfLines={2}>
+                {next.date}
+                {'\n'}
+                {pick(visitName(next.serviceId))}
+              </Txt>
+            </View>
+          ) : (
+            <View style={{ gap: 6 }}>
+              <Ionicons name="calendar-outline" size={22} color={c.accent} />
+              <Txt v="callout">{tr('Book an appointment', 'Prendre rendez-vous')}</Txt>
+            </View>
+          )}
+        </BentoTile>
+      </BentoRow>
+
+      {/* Needs attention. */}
+      <BentoTile title={tr('Needs your attention', 'À faire')}>
         {summary.actions.length === 0 ? (
-          <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'center', paddingVertical: space.md }}>
+          <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'center', paddingVertical: space.xs }}>
             <Ionicons name="checkmark-circle" size={22} color={c.success} />
             <Txt v="callout" muted style={{ flex: 1 }}>
               {tr('You’re all set: nothing needs your attention right now.', 'Tout est en ordre : rien ne demande votre attention.')}
@@ -90,9 +130,18 @@ export default function Home() {
             </View>
           ))
         )}
-      </Widget>
+        {summary.openFines > 1 && (
+          <Button
+            title={`${tr('Pay all tickets', 'Payer toutes les contraventions')} · ${money(summary.openFinesTotal, lang)}`}
+            size="md"
+            icon="flash"
+            onPress={() => router.push({ pathname: '/pay', params: { kind: 'all-fines', id: 'all', amount: String(summary.openFinesTotal), label: tr(`${summary.openFines} tickets`, `${summary.openFines} contraventions`) } })}
+          />
+        )}
+      </BentoTile>
 
-      <Widget title={tr('Favourite cards', 'Cartes favorites')} action={tr('View all', 'Tout voir')} onAction={() => router.push('/wallet')} flush>
+      {/* Cards carousel. */}
+      <BentoTile title={tr('Your cards', 'Vos cartes')} action={tr('View all', 'Tout voir')} onAction={() => router.push('/wallet')}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={cardWidth + space.md} decelerationRate="fast" contentContainerStyle={{ gap: space.md, paddingVertical: space.xs, paddingRight: space.lg }} style={{ marginHorizontal: -space.lg, paddingLeft: space.lg }}>
           {cards.map((cred, i) => (
             <PressScale key={cred.id} onPress={() => router.push(`/credential/${cred.id}`)} accessibilityLabel={cred.type === 'driver_licence' ? t('showLicence') : t(cred.type)} scaleTo={0.985} containerStyle={{ width: cardWidth }}>
@@ -101,9 +150,10 @@ export default function Home() {
           ))}
         </ScrollView>
         <Chip label={tr('Choose favourites', 'Choisir les favoris')} icon="star-outline" onPress={() => router.push('/favourites?kind=cards')} />
-      </Widget>
+      </BentoTile>
 
-      <Widget title={tr('Quick access', 'Accès rapide')}>
+      {/* Quick access. */}
+      <BentoTile title={tr('Quick access', 'Accès rapide')}>
         <View style={styles.grid}>
           <Tile icon="file-tray-full" label={tr('My requests', 'Mes demandes')} badge={openRequests} onPress={() => router.push('/requests')} />
           <Tile icon="calendar" label={tr('Appointments', 'Rendez-vous')} onPress={() => router.push('/appointments')} />
@@ -114,61 +164,19 @@ export default function Home() {
           <Tile icon="location" label={tr('Locations', 'Bureaux')} onPress={() => router.push('/locations')} />
           <Tile icon="help-buoy" label={tr('Help', 'Aide')} onPress={() => router.push('/help')} />
         </View>
-      </Widget>
+      </BentoTile>
 
-      <Widget title={t('tabFines')} action={tr('View all', 'Tout voir')} onAction={() => router.push('/fines')} flush>
-        <Card>
-          <View style={styles.dueRow}>
-            <View style={{ gap: 4, flex: 1 }}>
-              <Txt v="label" muted>
-                {t('totalDue')}
-              </Txt>
-              <Text style={[styles.amount, { color: summary.overdueFines ? c.danger : c.text }]} accessibilityLabel={hideAmounts ? tr('Amount hidden', 'Montant masqué') : money(summary.openFinesTotal, lang)}>
-                {hideAmounts ? '$ •••.••' : money(summary.openFinesTotal, lang)}
-              </Text>
+      {/* Favourite services. */}
+      {favServices.length > 0 && (
+        <BentoTile title={tr('Favourite services', 'Services favoris')} action={tr('Customize', 'Personnaliser')} onAction={() => router.push('/favourites?kind=services')}>
+          {favServices.map((s, i) => (
+            <View key={s.id}>
+              {i > 0 && <Divider inset={52} />}
+              <ListItem icon={CATEGORY_ICON[s.category]} title={pick(s.name)} onPress={() => router.push(serviceHref(s))} />
             </View>
-            <PressScale onPress={() => setHideAmounts((h) => !h)} accessibilityLabel={hideAmounts ? tr('Show amounts', 'Afficher les montants') : tr('Hide amounts', 'Masquer les montants')} style={[styles.eye, { backgroundColor: c.surfaceAlt }]}>
-              <Ionicons name={hideAmounts ? 'eye-outline' : 'eye-off-outline'} size={20} color={c.textMuted} />
-            </PressScale>
-          </View>
-          <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
-            <Badge label={`${summary.openFines} ${tr('open', 'en cours')}`} tone={summary.openFines ? 'info' : 'success'} />
-            {summary.overdueFines > 0 && <Badge label={`${summary.overdueFines} ${t('overdue')}`} tone="danger" />}
-          </View>
-          {summary.openFines > 1 && (
-            <Button
-              title={`${tr('Pay all', 'Tout payer')} · ${money(summary.openFinesTotal, lang)}`}
-              size="md"
-              icon="flash"
-              onPress={() => router.push({ pathname: '/pay', params: { kind: 'all-fines', id: 'all', amount: String(summary.openFinesTotal), label: tr(`${summary.openFines} tickets`, `${summary.openFines} contraventions`) } })}
-            />
-          )}
-        </Card>
-      </Widget>
-
-      <Widget title={tr('Favourite services', 'Services favoris')} action={tr('Customize', 'Personnaliser')} onAction={() => router.push('/favourites?kind=services')}>
-        {favServices.map((s, i) => (
-          <View key={s.id}>
-            {i > 0 && <Divider inset={52} />}
-            <ListItem icon={CATEGORY_ICON[s.category]} title={pick(s.name)} onPress={() => router.push(serviceHref(s))} />
-          </View>
-        ))}
-      </Widget>
-
-      <Widget title={tr('My appointments', 'Mes rendez-vous')} action={tr('View all', 'Tout voir')} onAction={() => router.push('/appointments')}>
-        {next && nextLoc ? (
-          <ListItem
-            icon="calendar"
-            title={`${next.date} · ${next.time}`}
-            subtitle={`${pick(visitName(next.serviceId))}\n${pick(nextLoc.name)}`}
-            right={next.status === 'checked_in' ? <Badge label={next.ticket?.number ?? ''} tone="success" /> : undefined}
-            onPress={() => router.push(`/appointments/${next.id}`)}
-          />
-        ) : (
-          <ListItem icon="add-circle" title={tr('Book an appointment', 'Prendre rendez-vous')} subtitle={tr('ServiceOntario and DriveTest, up to a week ahead', 'ServiceOntario et TestVolant, jusqu’à une semaine à l’avance')} onPress={() => router.push('/appointments/book')} />
-        )}
-      </Widget>
-
+          ))}
+        </BentoTile>
+      )}
     </Screen>
   );
 }
@@ -177,9 +185,8 @@ const styles = StyleSheet.create({
   bell: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
   bellDot: { position: 'absolute', top: -2, right: -2, minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, borderWidth: 2 },
   bellDotText: { color: '#fff', fontSize: 11, fontFamily: fonts.bold },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.md, paddingVertical: space.md, borderRadius: radius.md, marginTop: -space.xs },
-  dueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  amount: { fontFamily: fonts.extrabold, fontSize: 38, lineHeight: 44, letterSpacing: -1.2, fontVariant: ['tabular-nums'] },
-  eye: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: space.md, paddingVertical: space.sm },
+  amount: { fontFamily: fonts.monoBold, fontSize: 30, letterSpacing: -0.8, fontVariant: ['tabular-nums'] },
+  monoMd: { fontFamily: fonts.monoBold, fontSize: 22, letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  eye: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: space.md, paddingVertical: space.xs },
 });
