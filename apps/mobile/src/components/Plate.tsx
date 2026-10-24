@@ -28,7 +28,7 @@ export function Plate({ plate, jurisdiction = 'ON', size = 'md' }: { plate: stri
     return (
       <View style={styles.lgOuter} accessibilityLabel={`${wordmark} plate ${plate}`}>
         <View style={styles.lgInner}>
-          {([styles.boltTL, styles.boltTR, styles.boltBL, styles.boltBR] as const).map((b2, i) => (
+          {([styles.boltTL, styles.boltTR] as const).map((b2, i) => (
             <View key={i} style={[styles.bolt, b2]} />
           ))}
           <Text style={styles.lgWordmark}>{wordmark}</Text>
