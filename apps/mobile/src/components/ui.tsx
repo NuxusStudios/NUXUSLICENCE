@@ -1,5 +1,6 @@
-import { useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Animated,
   Platform,
@@ -16,8 +17,9 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { fonts, radius, space, type, useTheme, type TypeVariant } from '../lib/theme';
+import { fonts, radius, space, type, useIsDark, useTheme, type TypeVariant } from '../lib/theme';
 import { useI18n } from '../lib/i18n';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -207,6 +209,70 @@ export function Divider({ inset = 0 }: { inset?: number }) {
 }
 
 // ---------------------------------------------------------------------------
+// Liquid-glass materials — translucent, blurred surfaces for the navigation /
+// control layer (tab bar, floating controls), per Apple's guidance to keep the
+// glass on the chrome and the content opaque. Falls back to a solid surface
+// when the viewer has Reduce Transparency on, and degrades to a tinted view
+// where backdrop blur isn't supported.
+// ---------------------------------------------------------------------------
+
+/** Tracks the OS "Reduce Transparency" accessibility setting. */
+export function useReduceTransparency(): boolean {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceTransparencyEnabled?.()
+      .then((v) => alive && setReduce(!!v))
+      .catch(() => undefined);
+    const sub = AccessibilityInfo.addEventListener?.('reduceTransparencyChanged', (v) => setReduce(!!v));
+    return () => {
+      alive = false;
+      sub?.remove?.();
+    };
+  }, []);
+  return reduce;
+}
+
+/**
+ * A pane of "liquid glass": a blur, a thin translucent wash for legibility, and
+ * a bright top rim light. `children` render above the material. Use it for
+ * chrome, not for reading surfaces.
+ */
+export function Glass({
+  children,
+  style,
+  intensity = 44,
+  rim = true,
+}: {
+  children?: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  intensity?: number;
+  rim?: boolean;
+}) {
+  const c = useTheme();
+  const dark = useIsDark();
+  const reduce = useReduceTransparency();
+  if (reduce) {
+    return <View style={[{ backgroundColor: c.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, overflow: 'hidden' }, style]}>{children}</View>;
+  }
+  const wash = dark ? 'rgba(18,24,32,0.52)' : 'rgba(255,255,255,0.55)';
+  const edge = dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.70)';
+  return (
+    <View style={[{ overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: edge }, style]}>
+      <BlurView intensity={intensity} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: wash }]} pointerEvents="none" />
+      {rim ? <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: dark ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.9)' }} pointerEvents="none" /> : null}
+      {children}
+    </View>
+  );
+}
+
+/** Full-bleed glass used as the bottom tab bar's background (content scrolls under it). */
+export function TabBarBackground() {
+  return <Glass intensity={50} style={StyleSheet.absoluteFill} />;
+}
+
+// ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------
 
@@ -221,7 +287,7 @@ export function Button({
 }: {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'black';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'black' | 'glass';
   icon?: IconName;
   loading?: boolean;
   disabled?: boolean;
@@ -234,8 +300,11 @@ export function Button({
     danger: { bg: c.dangerBg, fg: c.danger, border: c.dangerBg },
     ghost: { bg: 'transparent', fg: c.accent, border: 'transparent' },
     black: { bg: '#000000', fg: '#FFFFFF', border: '#000000' },
+    glass: { bg: 'transparent', fg: c.text, border: 'transparent' },
   }[variant];
   const inactive = disabled || loading;
+  const isGlass = variant === 'glass';
+  const brad = size === 'md' ? radius.sm : radius.md;
   return (
     <PressScale
       onPress={onPress}
@@ -245,10 +314,17 @@ export function Button({
       style={[
         styles.button,
         size === 'md' && { minHeight: 44, borderRadius: radius.sm },
-        { backgroundColor: palette.bg, borderColor: palette.border, opacity: inactive ? 0.5 : 1 },
+        isGlass ? { borderColor: 'transparent', overflow: 'hidden' } : { backgroundColor: palette.bg, borderColor: palette.border },
+        { opacity: inactive ? 0.5 : 1 },
         variant === 'primary' && !inactive && { boxShadow: c.shadow },
       ]}
     >
+      {/* Liquid-glass fill for the glass variant. */}
+      {isGlass && <Glass intensity={40} style={StyleSheet.absoluteFill} />}
+      {/* Specular sheen across the top half of the primary CTA. */}
+      {variant === 'primary' && !inactive && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '52%', borderTopLeftRadius: brad, borderTopRightRadius: brad, backgroundColor: 'rgba(255,255,255,0.14)' }} pointerEvents="none" />
+      )}
       {loading ? (
         <ActivityIndicator color={palette.fg} />
       ) : (

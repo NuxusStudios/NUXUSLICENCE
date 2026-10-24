@@ -1,7 +1,7 @@
 import type { ColorValue } from 'react-native';
 import { Tabs } from 'expo-router/tabs';
 import { Ionicons } from '@expo/vector-icons';
-import type { IconName } from '../../components/ui';
+import { TabBarBackground, type IconName } from '../../components/ui';
 import { useI18n } from '../../lib/i18n';
 import { fonts, useTheme } from '../../lib/theme';
 
@@ -21,7 +21,9 @@ export default function TabsLayout() {
         tabBarActiveTintColor: c.text,
         tabBarInactiveTintColor: c.textFaint,
         tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 0.1 },
-        tabBarStyle: { backgroundColor: c.tabBar, borderTopColor: c.border, height: 64, paddingTop: 6, paddingBottom: 8 },
+        // Floating liquid-glass tab bar: content scrolls under it.
+        tabBarStyle: { position: 'absolute', backgroundColor: 'transparent', borderTopWidth: 0, elevation: 0, height: 64, paddingTop: 6, paddingBottom: 8 },
+        tabBarBackground: () => <TabBarBackground />,
       }}
     >
       <Tabs.Screen name="index" options={{ title: t('tabHome'), tabBarIcon: icon('home') }} />
