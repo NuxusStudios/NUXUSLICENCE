@@ -1,14 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fineTone } from '../../components/FineRow';
+import { POACaseStatusCard } from '../../components/kit';
 import { OffenceNotice } from '../../components/OffenceNotice';
 import { Badge, Button, Card, Divider, ErrorState, Loading, Notice, Row, Screen, SectionHeader, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
+import { DEMO_MODE } from '../../lib/config';
 import { date, money } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
 import { PARKING_STAGE_LABEL, PARKING_STAGE_TONE, canRequestScreening, parkingStageMessage } from '../../lib/shared/parking';
+import { POA_CASE_LABEL, isPOASource, type POACaseCode } from '../../lib/shared/poa';
 import { fonts, radius, space, useTheme } from '../../lib/theme';
 import { useAsync } from '../../lib/useAsync';
 
@@ -18,10 +21,23 @@ export default function FineScreen() {
   const { t, tr, pick, lang } = useI18n();
   const navigation = useNavigation();
   const { data, error, loading, reload } = useAsync(() => api.fine(id), id);
+  const [refreshingCase, setRefreshingCase] = useState(false);
 
   useEffect(() => {
     if (data) navigation.setOptions({ title: t(data.source) });
   }, [data, navigation, t]);
+
+  async function refreshCase() {
+    setRefreshingCase(true);
+    try {
+      await api.refreshCaseStatus(id);
+      await reload();
+    } catch {
+      /* keep last-known status */
+    } finally {
+      setRefreshingCase(false);
+    }
+  }
 
   if (!data && loading) return <Loading />;
   if (!data && error) return <ErrorState error={error} onRetry={reload} />;
@@ -29,6 +45,7 @@ export default function FineScreen() {
   const open = f.status === 'outstanding' || f.status === 'overdue';
   const isCamera = f.source === 'red_light_camera' || f.source === 'speed_camera';
   const isParking = f.source === 'parking';
+  const isPOA = isPOASource(f.source);
   const payAmount = f.amountDue ?? f.total;
   const screeningOpen = isParking && f.parking ? canRequestScreening(f.parking) : false;
 
@@ -44,6 +61,9 @@ export default function FineScreen() {
       </View>
 
       <OffenceNotice fine={f} />
+
+      {/* Live court case status for POA tickets (camera / officer-issued). */}
+      {isPOA && <POACaseStatusCard status={f.caseStatus} onRefresh={refreshCase} refreshing={refreshingCase} />}
 
       {/* APS timeline for parking penalties. */}
       {isParking && f.parking && (
@@ -126,6 +146,13 @@ export default function FineScreen() {
         </>
       )}
 
+      {DEMO_MODE && isPOA && (
+        <>
+          <SectionHeader>{t('demoTools')}</SectionHeader>
+          <DemoCaseStatus fineId={f.id} onChanged={reload} />
+        </>
+      )}
+
       {isCamera && f.evidence && (
         <>
           <SectionHeader>{t('evidence')}</SectionHeader>
@@ -166,6 +193,44 @@ function OptionHead({ n, title, body }: { n: number; title: string; body: string
         </Txt>
       </View>
     </View>
+  );
+}
+
+/** Demo-only: move this POA ticket's court case to any status to see the app react. */
+function DemoCaseStatus({ fineId, onChanged }: { fineId: string; onChanged: () => Promise<void> }) {
+  const { tr, pick } = useI18n();
+  const [busy, setBusy] = useState<POACaseCode>();
+  const codes: POACaseCode[] = ['before_court', 'early_resolution_scheduled', 'trial_scheduled', 'convicted', 'in_default', 'paid', 'withdrawn'];
+
+  async function flip(code: POACaseCode) {
+    setBusy(code);
+    try {
+      await api.setDemoCaseStatus(fineId, code);
+      await onChanged();
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  return (
+    <Card style={{ gap: space.md }}>
+      <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'flex-start' }}>
+        <View style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(127,127,127,0.12)' }}>
+          <Ionicons name="construct" size={22} />
+        </View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Txt v="strong">{tr('Simulate a court update', 'Simuler une mise à jour judiciaire')}</Txt>
+          <Txt v="caption" muted>
+            {tr('Move this ticket’s case status to see the app react (conviction and default raise an alert).', 'Changez l’état judiciaire de cette contravention pour voir la réaction de l’application (une condamnation ou un défaut déclenche une alerte).')}
+          </Txt>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+        {codes.map((code) => (
+          <Button key={code} title={pick(POA_CASE_LABEL[code])} variant="secondary" size="md" loading={busy === code} onPress={() => flip(code)} />
+        ))}
+      </View>
+    </Card>
   );
 }
 

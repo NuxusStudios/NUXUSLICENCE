@@ -52,6 +52,8 @@ export class Store {
   processedCameraEvents = new Map<string, string>();
   /** Idempotency: parking penalty-notice number -> fine id. */
   processedParkingEvents = new Map<string, string>();
+  /** Idempotency: POA "locationCode|offenceNumber" -> fine id (add-by-number). */
+  processedPoaTickets = new Map<string, string>();
   unmatchedParkingEvents: { event: import('./parking.js').ParkingEvent; reason: 'plate_not_found' | 'out_of_province'; receivedAt: string }[] = [];
   /** Revoked presentation token ids (e.g. device reported lost). */
   revokedPresentationIds = new Set<string>();

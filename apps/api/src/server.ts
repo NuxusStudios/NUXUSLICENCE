@@ -1,5 +1,6 @@
 import { buildApp } from './app.js';
 import { config } from './config.js';
+import { pruneUnmatchedCameraEvents } from './fines.js';
 import { seed, DEMO_EMAIL, DEMO_PASSWORD } from './seed.js';
 import { Store } from './store.js';
 
@@ -21,5 +22,18 @@ const sweep = () =>
     .sweepLicenceStatuses()
     .then((r) => app.log.info(`licence-status sweep: checked ${r.checked}, changed ${r.changed}`))
     .catch((err) => app.log.error({ err }, 'licence-status sweep error'));
-const timer = setInterval(() => void sweep(), DAY);
+const sweepPoa = () =>
+  app
+    .sweepPOACaseStatuses()
+    .then((r) => app.log.info(`POA case-status sweep: checked ${r.checked}, changed ${r.changed}`))
+    .catch((err) => app.log.error({ err }, 'POA case-status sweep error'));
+const prune = () => {
+  const n = pruneUnmatchedCameraEvents(store, config.camera.unmatchedRetentionDays);
+  if (n > 0) app.log.info(`pruned ${n} expired unmatched camera event(s)`);
+};
+const timer = setInterval(() => {
+  void sweep();
+  void sweepPoa();
+  prune();
+}, DAY);
 timer.unref?.();

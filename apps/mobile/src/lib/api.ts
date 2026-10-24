@@ -148,6 +148,11 @@ export const api = {
   payAllFines: (body: PaymentInput) => request<{ fines: Fine[]; payment: Payment }>('POST', '/v1/fines/pay-all', body),
   disputeFine: (id: string, body: { option: import('./types').DisputeOption; reason: string }) =>
     request<Fine>('POST', `/v1/fines/${id}/dispute`, body),
+  /** Re-check a POA ticket's court case status now (camera/officer tickets). */
+  refreshCaseStatus: (id: string) => request<Fine>('POST', `/v1/fines/${id}/case-status/refresh`, {}),
+  /** Add a POA ticket by its location code + offence number (the public search). */
+  addPoaTicket: (locationCode: string, offenceNumber: string) =>
+    request<{ outcome: string; fine: Fine }>('POST', '/v1/poa/lookup', { locationCode, offenceNumber }),
 
   services: () => request<ServiceDefinition[]>('GET', '/v1/services'),
   submitService: (id: string, body: { data: Record<string, string> } & Partial<PaymentInput>) =>
@@ -182,6 +187,9 @@ export const api = {
   /** Demo mode only: pretend MTO reported a new status for your licence. */
   setDemoLicenceStatus: (code: import('./types').MtoLicenceStatus) =>
     request<{ credentialId: string; status: import('./types').LicenceStatus; changed: boolean }>('POST', '/v1/demo/licence-status', { code }),
+  /** Demo mode only: move a POA ticket's court case to a given status. */
+  setDemoCaseStatus: (fineId: string, code: import('./types').POACaseCode) =>
+    request<Fine>('POST', `/v1/demo/case-status/${fineId}`, { code }),
 
   sign: (body: { documentTitle: string; documentContent: string; consent: true; pin: string }) =>
     request<SignatureRecord>('POST', '/v1/signatures', body),

@@ -8,6 +8,13 @@ export type {
 } from './shared/licence-status';
 export type { ParkingPenalty, ParkingStage, DisputeOption } from './shared/parking';
 export type {
+  POACaseStatus,
+  POACaseCode,
+  POACaseSource,
+  POACourtEvent,
+  POATicketRef,
+} from './shared/poa';
+export type {
   Appointment,
   Consent,
   DashboardAction,
@@ -108,6 +115,10 @@ export interface Fine {
   /** Computed by the API: amount payable now and the APS stage (parking). */
   amountDue?: number;
   parkingStage?: import('./shared/parking').ParkingStage;
+  /** POA ticket identifiers (camera/officer tickets prosecuted in court). */
+  poaRef?: import('./shared/poa').POATicketRef;
+  /** Live court case status from POA Online Services, refreshed automatically. */
+  caseStatus?: import('./shared/poa').POACaseStatus;
   paymentId?: string;
   dispute?: { option: import('./shared/parking').DisputeOption; reason: string; submittedAt: string; reference: string };
   vehicle?: Vehicle;

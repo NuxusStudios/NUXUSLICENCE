@@ -1,4 +1,4 @@
-import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHash } from 'node:crypto';
+import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHash, createHmac } from 'node:crypto';
 import { promisify } from 'node:util';
 import {
   SignJWT,
@@ -32,6 +32,19 @@ export async function verifyPassword(password: string, stored: string): Promise<
 
 export function sha256Hex(input: string): string {
   return createHash('sha256').update(input).digest('hex');
+}
+
+/** HMAC-SHA256 of `message` under `secret`, hex-encoded. Used to verify signed partner webhooks. */
+export function hmacSha256Hex(secret: string, message: string): string {
+  return createHmac('sha256', secret).update(message).digest('hex');
+}
+
+/** Constant-time comparison of two hex strings (lengths may differ safely). */
+export function timingSafeEqualHex(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
 
 export function newId(prefix: string): string {

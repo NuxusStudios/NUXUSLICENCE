@@ -2,9 +2,10 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { z, ZodError } from 'zod';
 import { timingSafeEqual } from 'node:crypto';
-import { config } from './config.js';
+import { config, type CameraPartner } from './config.js';
 import {
   hashPassword,
+  hmacSha256Hex,
   issueAccessToken,
   jwks,
   newId,
@@ -12,6 +13,7 @@ import {
   sha256Hex,
   signDocumentHash,
   signPresentation,
+  timingSafeEqualHex,
   verifyAccessToken,
   verifyPassword,
   verifyPresentation,
@@ -19,6 +21,8 @@ import {
 import { effectiveStatus, ingestCameraEvent } from './fines.js';
 import { getLicenceStatusProvider, DemoLicenceStatusProvider } from './licence-status.js';
 import { addTicketByNumber, ingestParkingEvent } from './parking.js';
+import { addPOATicketByNumber, getPOAProvider, poaKey, DemoPOACaseStatusProvider } from './poa.js';
+import { buildPOACaseStatus, isPOASource, poaCaseMessage, poaIsAdverseChange, poaShouldRefresh, type POACaseCode, type POACaseStatus } from './shared/poa.js';
 import { canRequestScreening, disputeOptionsFor, parkingAmountDue, parkingStage, type DisputeOption } from './shared/parking.js';
 import { buildLicenceStatus, isAdverseChange, licenceStatusMessage, shouldRefresh, type LicenceStatus, type MtoLicenceStatus } from './shared/licence-status.js';
 import { notify } from './notifications.js';
@@ -85,6 +89,9 @@ const paymentInput = z.object({
 });
 type PaymentBody = z.infer<typeof paymentInput>;
 
+// An *issued* automated-enforcement notice — i.e. after human adjudication at the
+// processing centre, not a raw plate scan. The notice-number / reviewed-at fields
+// make that contract explicit: CivicPass ingests tickets, never surveillance.
 const cameraEventSchema = z.object({
   eventId: z.string().min(1),
   type: z.enum(['red_light', 'speed']),
@@ -98,6 +105,10 @@ const cameraEventSchema = z.object({
   postedLimitKmh: z.number().positive().optional(),
   secondsIntoRed: z.number().nonnegative().optional(),
   setFine: z.number().positive(),
+  /** Penalty Order / notice number printed on the issued notice. */
+  noticeNumber: z.string().min(1).max(40).optional(),
+  /** When a reviewing officer adjudicated and issued the notice. */
+  reviewedAt: z.iso.datetime().optional(),
 });
 
 const parkingEventSchema = z.object({
@@ -127,6 +138,18 @@ export async function buildApp(opts: AppOptions = {}) {
   const app = Fastify({ logger: opts.logger ?? false });
   await app.register(cors, { origin: true, methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] });
   app.decorate('store', store);
+
+  // Keep the exact raw JSON bytes on the request so machine-to-machine webhooks
+  // (camera/enforcement partners) can be verified against an HMAC over the body.
+  // Behaviour is otherwise identical to Fastify's default JSON parser.
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    (req as FastifyRequest & { rawBody?: string }).rawBody = body as string;
+    try {
+      done(null, (body as string).length ? JSON.parse(body as string) : undefined);
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  });
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof HttpError) return reply.status(err.statusCode).send({ error: err.code, message: err.message });
@@ -161,6 +184,40 @@ export async function buildApp(opts: AppOptions = {}) {
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
       throw new HttpError(401, 'unauthenticated', 'Invalid integration key');
     }
+  }
+
+  /**
+   * Verify a signed enforcement-partner push. In 'live' mode every camera push
+   * must carry `x-civicpass-partner`, `x-civicpass-timestamp` and
+   * `x-civicpass-signature` (hex HMAC-SHA256 over `"<timestamp>.<rawBody>"`
+   * using that partner's shared secret), with the timestamp inside the replay
+   * window. Returns the authenticated partner, or null in 'demo' mode (where the
+   * coarse x-api-key alone gates the endpoint for dev/tests).
+   */
+  function requireCameraPartner(req: FastifyRequest): CameraPartner | null {
+    if (config.camera.mode !== 'live') return null;
+    const partnerId = String(req.headers['x-civicpass-partner'] ?? '');
+    const timestamp = String(req.headers['x-civicpass-timestamp'] ?? '');
+    const signature = String(req.headers['x-civicpass-signature'] ?? '');
+    const partner = config.camera.partners.find((p) => p.id === partnerId);
+    if (!partner) throw new HttpError(401, 'unauthenticated', 'Unknown or unauthorized partner');
+
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > config.camera.maxClockSkewSeconds) {
+      throw new HttpError(401, 'unauthenticated', 'Missing or stale request timestamp');
+    }
+    const rawBody = (req as FastifyRequest & { rawBody?: string }).rawBody ?? '';
+    const expected = hmacSha256Hex(partner.secret, `${timestamp}.${rawBody}`);
+    if (!signature || !timingSafeEqualHex(signature, expected)) {
+      throw new HttpError(401, 'unauthenticated', 'Invalid request signature');
+    }
+    return partner;
+  }
+
+  /** A partner may only submit tickets for the municipalities it is authorized for. */
+  function partnerMaySubmit(partner: CameraPartner | null, municipality: string): boolean {
+    if (!partner) return true; // demo mode
+    return partner.municipalities.includes('*') || partner.municipalities.includes(municipality);
   }
 
   const me = (req: FastifyRequest) => req.account!;
@@ -341,6 +398,48 @@ export async function buildApp(opts: AppOptions = {}) {
           notify(store, account, { category: 'security', title: note.title, body: note.body, link: `/credential/${c.id}` });
         } else if (previous && (previous.display === 'suspended' || previous.display === 'not_found') && next.display === 'valid') {
           notify(store, account, { category: 'general', title: 'Your driver’s licence is valid again', body: 'A status check shows your licence is back in good standing.', link: `/credential/${c.id}` });
+        }
+      }
+    }
+    return changed;
+  }
+
+  // --- POA court case status ----------------------------------------------
+  // Refresh the court status of the account's POA tickets (camera/officer).
+
+  async function refreshPOACaseStatuses(account: Account, opts: { force?: boolean } = {}): Promise<Fine[]> {
+    const cfg = config.poa;
+    const now = new Date();
+    const tickets = store
+      .finesFor(account.personId)
+      .filter((f) => isPOASource(f.source) && f.poaRef && !['paid', 'cancelled'].includes(f.status));
+    const due = tickets.filter((f) => opts.force || poaShouldRefresh(f.caseStatus, now, cfg.minRecheckSeconds));
+    if (!due.length) return [];
+    let results;
+    try {
+      results = await getPOAProvider().check(due.map((f) => f.poaRef!));
+    } catch {
+      return [];
+    }
+    const changed: Fine[] = [];
+    for (const f of due) {
+      const result = results.get(poaKey(f.poaRef!));
+      if (!result) continue;
+      const previous = f.caseStatus;
+      const next = buildPOACaseStatus(result, { source: getPOAProvider().source === 'poa_online' ? 'poa_online' : 'demo', now, recheckSeconds: cfg.recheckSeconds });
+      f.caseStatus = next;
+      // Keep the fine's own status in step with the court.
+      if (next.code === 'paid') f.status = 'paid';
+      else if (next.code === 'withdrawn') f.status = 'cancelled';
+      else if (next.code === 'in_default') f.status = 'overdue';
+      if (!previous || previous.code !== next.code) {
+        changed.push(f);
+        if (poaIsAdverseChange(previous, next)) {
+          const note =
+            next.code === 'in_default'
+              ? { title: 'A ticket is now in default', body: 'An unpaid fine on your record is in default. Pay it to avoid a plate-renewal block and collections.' }
+              : { title: 'You were convicted on a ticket', body: `A ticket on your record was convicted. $${next.amountOwing.toFixed(2)} is owing. Pay it by the due date to avoid default.` };
+          notify(store, account, { category: 'fine', title: note.title, body: note.body, link: `/fine/${f.id}` });
         }
       }
     }
@@ -639,9 +738,15 @@ export async function buildApp(opts: AppOptions = {}) {
   // -------------------------------------------------------------------------
   app.post('/v1/integrations/camera-events', async (req, reply) => {
     requireIntegrationKey(req);
+    const partner = requireCameraPartner(req);
     const body = z.union([cameraEventSchema, z.object({ events: z.array(cameraEventSchema).min(1).max(500) })]).parse(req.body);
     const events = 'events' in body ? body.events : [body];
-    const results = events.map((e) => ({ eventId: e.eventId, ...ingestCameraEvent(store, e) }));
+    const results = events.map((e) => {
+      if (!partnerMaySubmit(partner, e.municipality)) {
+        return { eventId: e.eventId, outcome: 'rejected' as const, reason: 'unauthorized_municipality' as const };
+      }
+      return { eventId: e.eventId, ...ingestCameraEvent(store, e) };
+    });
     return reply.status(202).send({ results });
   });
 
@@ -671,8 +776,9 @@ export async function buildApp(opts: AppOptions = {}) {
 
     secure.get('/v1/me', async (req) => {
       const account = me(req);
-      // Refresh licence status on app open (the app loads /v1/me first).
+      // Refresh licence status and POA court case status on app open.
       await refreshLicenceStatuses(account);
+      await refreshPOACaseStatuses(account);
       const person = personOf(account);
       return {
         account: { id: account.id, email: account.email, phone: account.phone, language: account.language, identityAssurance: account.identityAssurance, createdAt: account.createdAt, pinSet: !!account.pinHash },
@@ -711,6 +817,18 @@ export async function buildApp(opts: AppOptions = {}) {
       provider.setOverride(licence.documentNumber, code);
       const changed = await refreshLicenceStatuses(me(req), { force: true });
       return { credentialId: licence.id, status: licence.licenceStatus, changed: changed.length > 0 };
+    });
+
+    /** Demo only: move a POA ticket's court case status, to show the refresh + alert path. */
+    secure.post<{ Params: { id: string } }>('/v1/demo/case-status/:id', async (req) => {
+      const provider = getPOAProvider();
+      if (!(provider instanceof DemoPOACaseStatusProvider)) throw new HttpError(409, 'not_demo', 'Available in demo mode only.');
+      const { code } = z.object({ code: z.enum(['before_court', 'early_resolution_scheduled', 'trial_scheduled', 'convicted', 'paid', 'in_default', 'withdrawn', 'not_found'] as const satisfies readonly POACaseCode[]) }).parse(req.body);
+      const f = ownedFine(req, req.params.id);
+      if (!isPOASource(f.source) || !f.poaRef) throw new HttpError(400, 'no_case', 'This ticket has no court case status.');
+      provider.setOverride(f.poaRef, code);
+      await refreshPOACaseStatuses(me(req), { force: true });
+      return serializeFine(store.fines.get(req.params.id)!);
     });
 
     /** Lost or stolen phone: invalidate every presentation issued so far. */
@@ -794,11 +912,33 @@ export async function buildApp(opts: AppOptions = {}) {
     });
 
     // --- fines -------------------------------------------------------------
-    secure.get('/v1/fines', async (req) => store.finesFor(me(req).personId).map(serializeFine));
+    secure.get('/v1/fines', async (req) => {
+      await refreshPOACaseStatuses(me(req));
+      return store.finesFor(me(req).personId).map(serializeFine);
+    });
 
     secure.get<{ Params: { id: string } }>('/v1/fines/:id', async (req) => {
       const f = ownedFine(req, req.params.id);
+      if (isPOASource(f.source) && f.poaRef) await refreshPOACaseStatuses(me(req));
       return { ...serializeFine(f), vehicle: f.vehicleId ? store.vehicles.get(f.vehicleId) : undefined, payment: f.paymentId ? store.payments.get(f.paymentId) : undefined };
+    });
+
+    /** Force a court case-status re-check now. */
+    secure.post<{ Params: { id: string } }>('/v1/fines/:id/case-status/refresh', async (req) => {
+      const f = ownedFine(req, req.params.id);
+      if (!isPOASource(f.source) || !f.poaRef) throw new HttpError(400, 'no_case', 'This ticket has no court case status.');
+      await refreshPOACaseStatuses(me(req), { force: true });
+      return serializeFine(store.fines.get(req.params.id)!);
+    });
+
+    /** Add a POA ticket by its location code + offence number (what POA Online Services takes). */
+    secure.post('/v1/poa/lookup', async (req, reply) => {
+      const ref = z.object({ locationCode: z.string().min(1).max(10), offenceNumber: z.string().min(2).max(20) }).parse(req.body);
+      const result = await addPOATicketByNumber(store, me(req).personId, ref);
+      if (result.outcome === 'not_found') throw new HttpError(404, 'ticket_not_found', 'No case matches those numbers yet. It can take 10+ days to appear.');
+      await refreshPOACaseStatuses(me(req), { force: true });
+      const fine = serializeFine(store.fines.get(result.fineId!)!);
+      return reply.status(result.outcome === 'created' ? 201 : 200).send({ outcome: result.outcome, fine });
     });
 
     secure.post<{ Params: { id: string } }>('/v1/fines/:id/pay', async (req, reply: FastifyReply) => {
@@ -1083,6 +1223,19 @@ export async function buildApp(opts: AppOptions = {}) {
   }
   app.decorate('sweepLicenceStatuses', sweepLicenceStatuses);
 
+  /** Scheduled POA court case-status sweep: re-check every account's POA tickets. */
+  async function sweepPOACaseStatuses(): Promise<{ checked: number; changed: number }> {
+    let checked = 0;
+    let changed = 0;
+    for (const account of store.accounts.values()) {
+      const before = store.finesFor(account.personId).filter((f) => isPOASource(f.source) && f.poaRef).length;
+      checked += before;
+      changed += (await refreshPOACaseStatuses(account, { force: true })).length;
+    }
+    return { checked, changed };
+  }
+  app.decorate('sweepPOACaseStatuses', sweepPOACaseStatuses);
+
   return app;
 }
 
@@ -1090,5 +1243,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     store: Store;
     sweepLicenceStatuses: () => Promise<{ checked: number; changed: number }>;
+    sweepPOACaseStatuses: () => Promise<{ checked: number; changed: number }>;
   }
 }

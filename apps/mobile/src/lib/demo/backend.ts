@@ -14,6 +14,7 @@
 import { base64url, fromBase64url, sha256Hex } from './hash';
 import { buildLicenceStatus, isAdverseChange, shouldRefresh, type LicenceStatusResult, type MtoLicenceStatus } from '../shared/licence-status';
 import { canRequestScreening, disputeOptionsFor, parkingAmountDue, parkingStage, parkingTimeline } from '../shared/parking';
+import { buildPOACaseStatus, isPOASource, poaIsAdverseChange, poaShouldRefresh, type POACaseCode, type POACaseResult, type POATicketRef } from '../shared/poa';
 import {
   FAQ,
   LOCATIONS,
@@ -171,8 +172,8 @@ function seed() {
   preferences.set('acc_alex', { ...defaultPreferences(), favouriteCards: ['cred_alex_dl', 'cred_alex_vp_car', 'cred_alex_hc'] });
 
   const seeded: FineRec[] = [
-    { id: 'fine_rlc_1', externalId: 'JPC-RLC-2026-000187', source: 'red_light_camera', liability: 'owner', personId: 'per_alex', vehicleId: 'veh_alex_car', plate: 'CVPS 123', offence: 'Fail to stop for red light — vehicle owner (camera)', statute: 'Highway Traffic Act — red light camera, owner liability', location: 'Example Ave & Sample St (northbound)', municipality: 'Toronto', occurredAt: iso(-6), issuedAt: iso(-3), dueDate: iso(12), ...totals(325), demeritPoints: 0, status: 'outstanding', evidence: { images: ['evidence://a', 'evidence://b'], secondsIntoRed: 1.4 } },
-    { id: 'fine_officer_1', externalId: 'POA-4471-889120', source: 'officer_issued', liability: 'driver', personId: 'per_alex', offence: 'Speeding — 72 km/h in a 50 km/h zone', statute: 'Highway Traffic Act s.128', location: 'Lakeshore Example Blvd W', municipality: 'Toronto', occurredAt: iso(-20), issuedAt: iso(-20), dueDate: iso(-5), ...totals(95), demeritPoints: 3, status: 'outstanding' },
+    { id: 'fine_rlc_1', externalId: 'JPC-RLC-2026-000187', source: 'red_light_camera', liability: 'owner', personId: 'per_alex', vehicleId: 'veh_alex_car', plate: 'CVPS 123', offence: 'Fail to stop for red light — vehicle owner (camera)', statute: 'Highway Traffic Act — red light camera, owner liability', location: 'Example Ave & Sample St (northbound)', municipality: 'Toronto', occurredAt: iso(-6), issuedAt: iso(-3), dueDate: iso(12), ...totals(325), demeritPoints: 0, status: 'outstanding', evidence: { images: ['evidence://a', 'evidence://b'], secondsIntoRed: 1.4 }, poaRef: { locationCode: '0311', offenceNumber: 'AJ472210' } },
+    { id: 'fine_officer_1', externalId: 'POA-4471-889120', source: 'officer_issued', liability: 'driver', personId: 'per_alex', offence: 'Speeding — 72 km/h in a 50 km/h zone', statute: 'Highway Traffic Act s.128', location: 'Lakeshore Example Blvd W', municipality: 'Toronto', occurredAt: iso(-20), issuedAt: iso(-20), dueDate: iso(-5), ...totals(95), demeritPoints: 3, status: 'outstanding', poaRef: { locationCode: '0311', offenceNumber: 'AJ447189' } },
     { id: 'fine_ase_1', externalId: 'JPC-ASE-2025-104552', source: 'speed_camera', liability: 'owner', personId: 'per_alex', vehicleId: 'veh_alex_car', plate: 'CVPS 123', offence: 'Speeding 51 km/h in a 40 km/h zone — vehicle owner (camera)', statute: 'Highway Traffic Act s.128 — automated speed enforcement, owner liability', location: 'Sample Rd near Example Public School (community safety zone)', municipality: 'Toronto', occurredAt: '2025-10-02T14:12:00.000Z', issuedAt: '2025-10-09T10:00:00.000Z', dueDate: '2025-10-24T10:00:00.000Z', ...totals(50), demeritPoints: 0, status: 'paid', evidence: { images: ['evidence://c'], recordedSpeedKmh: 51, postedLimitKmh: 40 }, paymentId: 'pay_hist_1' },
     { id: 'fine_parking_1', externalId: 'PKG-TOR-77810023', source: 'parking', liability: 'owner', personId: 'per_alex', vehicleId: 'veh_alex_bike', plate: '7AB12', offence: 'Park in a prohibited area during prohibited times', statute: 'Municipal parking by-law', location: '200 Sample Street', municipality: 'Toronto', occurredAt: iso(-2), issuedAt: iso(-2), dueDate: iso(43), setFine: 55, victimFineSurcharge: 0, courtCosts: 0, total: 55, demeritPoints: 0, status: 'outstanding', parking: parkingTimeline({ penaltyNoticeNumber: 'PKG-TOR-77810023', earlyAmount: 40, setFine: 55, issuedAt: iso(-2) }) },
   ];
@@ -250,6 +251,86 @@ function refreshLicence(a: Account, force = false): boolean {
     }
   }
   return changed;
+}
+
+// POA court case status (mirrors apps/api; the real app reads POA Online Services).
+const POA_RECHECK_SECONDS = 86400;
+const POA_OFFENCES = [
+  { offence: 'Speeding — exceed the posted limit', statute: 'Highway Traffic Act s.128', setFine: 95 },
+  { offence: 'Fail to stop at a red light', statute: 'Highway Traffic Act s.144(18)', setFine: 325 },
+  { offence: 'Fail to obey a stop sign', statute: 'Highway Traffic Act s.136', setFine: 110 },
+  { offence: 'Use a hand-held device while driving', statute: 'Highway Traffic Act s.78.1', setFine: 615 },
+];
+const poaKey = (r: POATicketRef) => `${r.locationCode.replace(/\s/g, '').toUpperCase()}|${r.offenceNumber.replace(/\s/g, '').toUpperCase()}`;
+const poaOverrides = new Map<string, POACaseCode>();
+function poaHash(k: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function poaResult(ref: POATicketRef, setFine: number): POACaseResult {
+  const k = poaKey(ref);
+  const code = poaOverrides.get(k) ?? ((): POACaseCode => {
+    const b = poaHash(k) % 100;
+    if (b < 70) return 'before_court';
+    if (b < 82) return 'convicted';
+    if (b < 90) return 'early_resolution_scheduled';
+    if (b < 96) return 'trial_scheduled';
+    return 'paid';
+  })();
+  const total = totals(setFine).total;
+  switch (code) {
+    case 'convicted': return { code, amountOwing: total, fineDueOn: iso(15) };
+    case 'in_default': return { code, amountOwing: total };
+    case 'early_resolution_scheduled': return { code, amountOwing: 0, nextEvent: { kind: 'early_resolution', at: iso(21), location: 'Provincial Offences Court' } };
+    case 'trial_scheduled': return { code, amountOwing: 0, nextEvent: { kind: 'trial', at: iso(45), location: 'Provincial Offences Court' } };
+    default: return { code, amountOwing: 0 };
+  }
+}
+
+/** Refresh the court status of the account's POA tickets; returns true if anything changed. */
+function refreshPOA(a: Account, force = false): boolean {
+  const now = new Date();
+  let changed = false;
+  for (const f of fines.values()) {
+    if (f.personId !== a.personId || !isPOASource(f.source) || !f.poaRef) continue;
+    if (['paid', 'cancelled'].includes(f.status)) continue;
+    if (!force && !poaShouldRefresh(f.caseStatus, now, 0)) continue;
+    const previous = f.caseStatus;
+    const next = buildPOACaseStatus(poaResult(f.poaRef, f.setFine || 95), { source: 'demo', now, recheckSeconds: POA_RECHECK_SECONDS });
+    f.caseStatus = next;
+    if (next.code === 'paid') f.status = 'paid';
+    else if (next.code === 'withdrawn') f.status = 'cancelled';
+    else if (next.code === 'in_default') f.status = 'overdue';
+    if (!previous || previous.code !== next.code) {
+      changed = true;
+      if (poaIsAdverseChange(previous, next)) {
+        notify(a.id, next.code === 'in_default'
+          ? { category: 'fine', title: 'A ticket is now in default', body: 'An unpaid fine on your record is in default. Pay it to avoid a plate-renewal block and collections.', link: `/fine/${f.id}` }
+          : { category: 'fine', title: 'You were convicted on a ticket', body: `A ticket on your record was convicted. $${next.amountOwing.toFixed(2)} is owing.`, link: `/fine/${f.id}` });
+      }
+    }
+  }
+  return changed;
+}
+
+/** Add a POA ticket by its location code + offence number. */
+function addPOAByNumber(a: Account, ref: POATicketRef) {
+  const k = poaKey(ref);
+  const dup = [...fines.values()].find((f) => f.personId === a.personId && f.poaRef && poaKey(f.poaRef) === k);
+  if (dup) { refreshPOA(a, true); return { outcome: 'duplicate', fine: fineView(dup) }; }
+  if (ref.offenceNumber.replace(/\s/g, '').endsWith('0')) return fail(404, 'ticket_not_found', 'No case matches those numbers yet. It can take 10+ days to appear.');
+  const o = POA_OFFENCES[poaHash(k) % POA_OFFENCES.length]!;
+  const issuedAt = iso(-((poaHash(k) % 20) + 11));
+  const fine: FineRec = {
+    id: newId('fine'), externalId: `${ref.locationCode}-${ref.offenceNumber}`, source: 'officer_issued', liability: 'driver', personId: a.personId,
+    offence: o.offence, statute: o.statute, location: 'Provincial Offences Court', municipality: 'Toronto', occurredAt: issuedAt, issuedAt,
+    dueDate: iso(RESPONSE_DAYS), ...totals(o.setFine), demeritPoints: 0, status: 'outstanding', poaRef: ref,
+  };
+  fines.set(fine.id, fine);
+  notify(a.id, { category: 'fine', title: 'Ticket added', body: `${o.offence} — Toronto. We'll keep its court status up to date.`, link: `/fine/${fine.id}` });
+  refreshPOA(a, true);
+  return { outcome: 'created', fine: fineView(fines.get(fine.id)!) };
 }
 
 function credentialView(c: Cred): Credential {
@@ -501,7 +582,7 @@ function addParkingByNumber(a: Account, penaltyNoticeNumber: string) {
 // ---------------------------------------------------------------------------
 
 // Second path segment -> index of the record id in the path.
-const ID_AT: Record<string, number> = { wallet: 2, vehicles: 2, fines: 2, services: 2, inbox: 2, 'service-requests': 2, appointments: 2, consents: 2, locations: 2 };
+const ID_AT: Record<string, number> = { wallet: 2, vehicles: 2, fines: 2, services: 2, inbox: 2, 'service-requests': 2, appointments: 2, consents: 2, locations: 2, demo: 3 };
 const NOT_IDS = new Set(['pay-all', 'read-all', 'start', 'orders', 'check']);
 
 export async function demoRequest(method: string, path: string, body: Body, token: string | null): Promise<unknown> {
@@ -640,6 +721,7 @@ function route(method: string, path: string, body: Body, token: string | null): 
   switch (route) {
     case 'GET /me':
       refreshLicence(a);
+      refreshPOA(a);
       return { account: { id: a.id, email: a.email, phone: a.phone, language: a.language, identityAssurance: 'IAL2', createdAt: a.createdAt, pinSet: !!a.pin }, person, summary: summary(a), preferences: prefsOf(a.id) };
     case 'PATCH /me':
       if (body?.language) a.language = body.language;
@@ -750,11 +832,29 @@ function route(method: string, path: string, body: Body, token: string | null): 
     }
 
     case 'GET /fines':
+      refreshPOA(a);
       return finesOf(a.personId).map(fineView);
     case 'GET /fines/:id': {
       const f = fines.get(id!);
       if (!f || f.personId !== a.personId) fail(404, 'not_found', 'Fine not found');
+      if (isPOASource(f!.source) && f!.poaRef) refreshPOA(a);
       return { ...fineView(f!), vehicle: f!.vehicleId ? vehicles.get(f!.vehicleId) : undefined, payment: f!.paymentId ? payments.get(f!.paymentId) : undefined };
+    }
+    case 'POST /fines/:id/case-status/refresh': {
+      const f = fines.get(id!);
+      if (!f || f.personId !== a.personId) fail(404, 'not_found', 'Fine not found');
+      if (!isPOASource(f!.source) || !f!.poaRef) fail(400, 'no_case', 'This ticket has no court case status.');
+      refreshPOA(a, true);
+      return fineView(fines.get(id!)!);
+    }
+    case 'POST /poa/lookup':
+      return addPOAByNumber(a, { locationCode: String(body?.locationCode ?? ''), offenceNumber: String(body?.offenceNumber ?? '') });
+    case 'POST /demo/case-status/:id': {
+      const f = fines.get(id!);
+      if (!f || f.personId !== a.personId || !f.poaRef) fail(404, 'not_found', 'Ticket not found.');
+      poaOverrides.set(poaKey(f!.poaRef!), String(body?.code) as POACaseCode);
+      refreshPOA(a, true);
+      return fineView(fines.get(f!.id)!);
     }
     case 'POST /fines/pay-all': {
       const open = finesOf(a.personId).filter((f) => ['outstanding', 'overdue'].includes(status(f)));

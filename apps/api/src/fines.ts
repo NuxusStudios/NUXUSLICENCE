@@ -53,6 +53,18 @@ export type CameraIngestResult =
   | { outcome: 'unmatched'; reason: 'plate_not_found' | 'out_of_province' };
 
 /**
+ * Data minimization: drop queued unmatched camera events older than the
+ * retention window so the review queue never becomes a long-lived store of
+ * plate data. Returns how many were purged.
+ */
+export function pruneUnmatchedCameraEvents(store: Store, retentionDays: number, now = new Date()): number {
+  const cutoff = now.getTime() - retentionDays * 86_400_000;
+  const before = store.unmatchedCameraEvents.length;
+  store.unmatchedCameraEvents = store.unmatchedCameraEvents.filter((u) => new Date(u.receivedAt).getTime() >= cutoff);
+  return before - store.unmatchedCameraEvents.length;
+}
+
+/**
  * Turn an automated-enforcement camera event into a fine on the registered
  * owner's account. Camera offences are owner-liability: the ticket follows the
  * plate, not the driver, and carries no demerit points.
@@ -80,7 +92,7 @@ export function ingestCameraEvent(store: Store, event: CameraEvent): CameraInges
   const isRedLight = event.type === 'red_light';
   const fine: Fine = {
     id: newId('fine'),
-    externalId: event.eventId,
+    externalId: event.noticeNumber ?? event.eventId,
     source: isRedLight ? 'red_light_camera' : 'speed_camera',
     liability: 'owner',
     personId: vehicle.ownerPersonId,

@@ -4,6 +4,36 @@ function env(name: string, fallback: string): string {
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+/** An authorized automated-enforcement partner (processing centre / municipal vendor). */
+export interface CameraPartner {
+  /** Stable partner id, sent in the `x-civicpass-partner` header. */
+  id: string;
+  /** Shared HMAC-SHA256 secret used to sign pushed events. Never logged. */
+  secret: string;
+  /** Municipalities this partner is authorized to submit tickets for ('*' = any). */
+  municipalities: string[];
+}
+
+function parseCameraPartners(raw?: string): CameraPartner[] {
+  if (!raw) return [];
+  let arr: unknown;
+  try {
+    arr = JSON.parse(raw);
+  } catch {
+    throw new Error('CAMERA_PARTNERS must be valid JSON (an array of { id, secret, municipalities }).');
+  }
+  if (!Array.isArray(arr)) throw new Error('CAMERA_PARTNERS must be a JSON array.');
+  return arr.map((p) => {
+    const partner = p as Partial<CameraPartner>;
+    if (!partner.id || !partner.secret) throw new Error('Each CAMERA_PARTNERS entry needs an id and a secret.');
+    return {
+      id: String(partner.id),
+      secret: String(partner.secret),
+      municipalities: (partner.municipalities ?? ['*']).map(String),
+    };
+  });
+}
+
 function secret(name: string, devFallback: string): string {
   const value = process.env[name];
   if (value) return value;
@@ -53,11 +83,39 @@ export const config = {
     batchSize: Number(env('LICENCE_BATCH_SIZE', '100')),
   },
 
+  /** POA court case status (justice services POA Online Services integration). */
+  poa: {
+    provider: env('POA_PROVIDER', isProduction ? 'poa_online' : 'demo') as 'demo' | 'poa_online',
+    endpoint: process.env.POA_ENDPOINT,
+    apiKey: process.env.POA_API_KEY,
+    /** Reuse-a-recent-check floor so one app open doesn't fan out to the court feed. */
+    minRecheckSeconds: Number(env('POA_RECHECK_MIN_SECONDS', isProduction ? '300' : '0')),
+    recheckSeconds: Number(env('POA_RECHECK_SECONDS', '86400')),
+  },
+
   /** Parking tickets (municipal APS; vendor gtechna). */
   parking: {
     /** 'demo' resolves notice numbers locally; 'gtechna' calls the municipal integration. */
     provider: env('PARKING_PROVIDER', isProduction ? 'gtechna' : 'demo') as 'demo' | 'gtechna',
     endpoint: process.env.PARKING_ENDPOINT,
     apiKey: process.env.PARKING_API_KEY,
+  },
+
+  /**
+   * Automated-enforcement camera ingestion (red-light cameras; speed cameras
+   * where lawful). The pipeline is production-ready; going live only needs the
+   * data-sharing agreement, then CAMERA_INTEGRATION_MODE=live plus the signed
+   * partner registry below. In 'demo' mode the coarse x-api-key alone is
+   * accepted (dev/tests); in 'live' mode every push must carry a valid
+   * per-partner HMAC signature and a fresh timestamp.
+   */
+  camera: {
+    mode: env('CAMERA_INTEGRATION_MODE', isProduction ? 'live' : 'demo') as 'demo' | 'live',
+    /** Authorized enforcement partners, from CAMERA_PARTNERS (JSON). Empty until an agreement lands. */
+    partners: parseCameraPartners(process.env.CAMERA_PARTNERS),
+    /** Max seconds a signed request's timestamp may deviate from server time (replay window). */
+    maxClockSkewSeconds: Number(env('CAMERA_MAX_CLOCK_SKEW_SECONDS', '300')),
+    /** How long unmatched/queued events are retained before they are purged (data minimization). */
+    unmatchedRetentionDays: Number(env('CAMERA_UNMATCHED_RETENTION_DAYS', '90')),
   },
 };

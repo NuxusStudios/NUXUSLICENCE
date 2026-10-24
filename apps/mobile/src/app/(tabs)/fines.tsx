@@ -65,8 +65,64 @@ export default function Fines() {
         )}
       </Card>
       <AddParkingTicket onAdded={reload} />
+      <AddCourtTicket onAdded={reload} />
       {DEMO_MODE && <SimulateTicket onCreated={reload} accent={c.accent} />}
     </Screen>
+  );
+}
+
+/** Add a POA court ticket by its location code + offence number (POA Online Services lookup). */
+function AddCourtTicket({ onAdded }: { onAdded: () => Promise<void> }) {
+  const { tr } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [locationCode, setLocationCode] = useState('');
+  const [offenceNumber, setOffenceNumber] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function add() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const res = await api.addPoaTicket(locationCode.trim(), offenceNumber.trim());
+      await onAdded();
+      setOpen(false);
+      setLocationCode('');
+      setOffenceNumber('');
+      router.push(`/fine/${res.fine.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <SectionHeader>{tr('Have a court ticket?', 'Vous avez une contravention judiciaire?')}</SectionHeader>
+      <Card style={{ gap: space.md }}>
+        <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'flex-start' }}>
+          <IconTile icon="business" />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Txt v="strong">{tr('Add a court (POA) ticket', 'Ajouter une contravention (LIP)')}</Txt>
+            <Body muted style={{ fontSize: 14, lineHeight: 20 }}>
+              {tr('Red-light, speed-camera and officer-issued tickets appear here automatically. To track another, enter the location code and offence number printed on it, and we’ll keep its court status up to date.', 'Les contraventions de feu rouge, de radar et remises par un agent apparaissent ici automatiquement. Pour en suivre une autre, entrez le code de lieu et le numéro d’infraction qui y figurent; nous suivrons son état judiciaire.')}
+            </Body>
+          </View>
+        </View>
+        {open ? (
+          <>
+            <Field label={tr('Location code', 'Code de lieu')} value={locationCode} onChangeText={setLocationCode} autoCapitalize="characters" placeholder="0311" />
+            <Field label={tr('Offence number', 'Numéro d’infraction')} value={offenceNumber} onChangeText={setOffenceNumber} autoCapitalize="characters" placeholder="AJ472210" />
+            {error && <Notice tone="danger">{error}</Notice>}
+            <Button title={tr('Look up and add', 'Rechercher et ajouter')} icon="search" onPress={add} loading={busy} disabled={locationCode.trim().length < 2 || offenceNumber.trim().length < 3} />
+            <Button title={tr('Cancel', 'Annuler')} variant="ghost" size="md" onPress={() => { setOpen(false); setError(undefined); }} />
+          </>
+        ) : (
+          <Button title={tr('Add by number', 'Ajouter par numéro')} variant="secondary" size="md" icon="add" onPress={() => setOpen(true)} />
+        )}
+      </Card>
+    </>
   );
 }
 

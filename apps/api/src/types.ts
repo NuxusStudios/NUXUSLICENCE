@@ -106,6 +106,10 @@ export interface Fine {
   evidence?: { images: string[]; recordedSpeedKmh?: number; postedLimitKmh?: number; secondsIntoRed?: number };
   /** APS timeline + penalty-notice number for source 'parking'. */
   parking?: import('./shared/parking.js').ParkingPenalty;
+  /** ICON location code + offence number for POA court tickets (camera/officer). */
+  poaRef?: import('./shared/poa.js').POATicketRef;
+  /** Live court case status from POA Online Services, refreshed automatically. */
+  caseStatus?: import('./shared/poa.js').POACaseStatus;
   paymentId?: string;
   dispute?: Dispute;
 }
@@ -198,6 +202,10 @@ export interface CameraEvent {
   postedLimitKmh?: number;
   secondsIntoRed?: number;
   setFine: number;
+  /** Penalty Order / notice number printed on the issued notice. */
+  noticeNumber?: string;
+  /** When a reviewing officer adjudicated and issued the notice. */
+  reviewedAt?: string;
 }
 
 export interface UnmatchedCameraEvent {

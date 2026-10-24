@@ -151,6 +151,7 @@ export async function seed(store: Store): Promise<void> {
       demeritPoints: 0,
       status: 'outstanding',
       evidence: { images: ['evidence://rlc-000187-a.jpg', 'evidence://rlc-000187-b.jpg'], secondsIntoRed: 1.4 },
+      poaRef: { locationCode: '0311', offenceNumber: 'AJ472210' },
     },
     {
       id: 'fine_officer_1',
@@ -168,6 +169,7 @@ export async function seed(store: Store): Promise<void> {
       ...fineTotals(95),
       demeritPoints: 3,
       status: 'outstanding',
+      poaRef: { locationCode: '0311', offenceNumber: 'AJ447189' },
     },
     {
       id: 'fine_ase_1',

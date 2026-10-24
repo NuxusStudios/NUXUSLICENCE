@@ -9,10 +9,11 @@ import { router } from 'expo-router';
 import { Badge, Button, Card, IconTile, Notice, PressScale, Txt, type IconName } from './ui';
 import { DEMO_MODE } from '../lib/config';
 import { DEMO_PIN } from '../lib/demo/backend';
-import { dateTime, timeAgo } from '../lib/format';
+import { date, dateTime, money, timeAgo } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { passwordChecks, type Appointment, type RequestEvent, type RequestStatus } from '../lib/shared/platform';
 import { LICENCE_STATUS_LABEL, LICENCE_STATUS_TONE, licenceConditionLabels, licenceStatusMessage, type LicenceStatus } from '../lib/shared/licence-status';
+import { POA_CASE_LABEL, POA_CASE_TONE, poaCaseMessage, type POACaseStatus } from '../lib/shared/poa';
 import { fonts, radius, space, useTheme } from '../lib/theme';
 
 // ---------------------------------------------------------------------------
@@ -592,6 +593,77 @@ export function LicenceStatusCard({ status, onRefresh, refreshing }: { status?: 
       ) : null}
       <Txt v="caption" faint>
         {tr('Source: Ontario driver record (prototype uses demo data)', 'Source : dossier de conduite de l’Ontario (le prototype utilise des données fictives)')}
+      </Txt>
+    </Card>
+  );
+}
+
+/**
+ * Live court case status for a POA ticket (red-light / speed camera, or
+ * officer-issued), refreshed automatically from POA Online Services. Shows
+ * where the case stands, any amount owing, the next court date, and a manual
+ * re-check.
+ */
+export function POACaseStatusCard({ status, onRefresh, refreshing }: { status?: POACaseStatus; onRefresh?: () => void; refreshing?: boolean }) {
+  const c = useTheme();
+  const { tr, pick, lang } = useI18n();
+  const code = status?.code ?? 'before_court';
+  const tone = status ? POA_CASE_TONE[code] : 'neutral';
+  const toneColor = tone === 'success' ? c.success : tone === 'danger' ? c.danger : tone === 'warning' ? c.warning : tone === 'info' ? c.accent : c.textMuted;
+  const toneBg = tone === 'success' ? c.successBg : tone === 'danger' ? c.dangerBg : tone === 'warning' ? c.warningBg : tone === 'info' ? c.primarySoft : c.surfaceAlt;
+  const icon: IconName =
+    code === 'convicted' ? 'alert-circle' : code === 'in_default' ? 'warning' : code === 'paid' || code === 'withdrawn' ? 'checkmark-circle' : code === 'trial_scheduled' ? 'hammer' : code === 'early_resolution_scheduled' ? 'people' : 'business';
+  return (
+    <Card style={{ gap: space.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+        <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: toneBg, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name={icon} size={24} color={toneColor} />
+        </View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' }}>
+            <Txt v="headline" style={{ color: toneColor }}>
+              {pick(POA_CASE_LABEL[code])}
+            </Txt>
+            <Badge label={tr('Court status', 'État judiciaire')} tone={tone === 'success' ? 'success' : tone === 'danger' ? 'danger' : tone === 'warning' ? 'warning' : 'neutral'} />
+          </View>
+          {status ? (
+            <Txt v="caption" faint>
+              {tr('Checked automatically', 'Vérifié automatiquement')} · {timeAgo(status.checkedAt, lang)}
+            </Txt>
+          ) : null}
+        </View>
+        {onRefresh ? (
+          <PressScale onPress={onRefresh} accessibilityLabel={tr('Check now', 'Vérifier maintenant')} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="refresh" size={20} color={refreshing ? c.textFaint : c.text} />
+          </PressScale>
+        ) : null}
+      </View>
+      {status ? (
+        <Txt v="callout" muted>
+          {pick(poaCaseMessage(status))}
+        </Txt>
+      ) : null}
+      {status && status.amountOwing > 0 ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: toneBg, borderRadius: radius.sm, paddingHorizontal: space.md, paddingVertical: space.sm }}>
+          <Txt v="label" style={{ color: toneColor }}>
+            {tr('Fine owing to the court', 'Amende due au tribunal')}
+          </Txt>
+          <Txt v="strong" style={{ color: toneColor }}>
+            {money(status.amountOwing, lang)}
+            {status.fineDueOn ? ` · ${tr('by', 'avant le')} ${date(status.fineDueOn, lang)}` : ''}
+          </Txt>
+        </View>
+      ) : null}
+      {status?.nextEvent ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Ionicons name={status.nextEvent.kind === 'trial' ? 'hammer-outline' : 'people-outline'} size={16} color={c.accent} />
+          <Txt v="callout">
+            {status.nextEvent.kind === 'trial' ? tr('Trial', 'Procès') : tr('Meeting with a prosecutor', 'Rencontre avec un procureur')} · {dateTime(status.nextEvent.at, lang)}
+          </Txt>
+        </View>
+      ) : null}
+      <Txt v="caption" faint>
+        {tr('Source: POA Online Services (prototype uses demo data)', 'Source : services en ligne de la LIP (le prototype utilise des données fictives)')}
       </Txt>
     </Card>
   );
