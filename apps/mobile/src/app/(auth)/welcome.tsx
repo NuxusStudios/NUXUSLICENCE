@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
@@ -62,14 +62,6 @@ export default function Welcome() {
           </Txt>
         </View>
         <Button title={lang === 'en' ? 'Français' : 'English'} variant="ghost" size="md" onPress={() => setLang(lang === 'en' ? 'fr' : 'en')} />
-      </View>
-
-      <View style={[styles.announce, { backgroundColor: c.goldBg }]}>
-        <Ionicons name="sparkles" size={16} color={c.gold} />
-        <Txt v="caption" style={{ flex: 1, fontFamily: fonts.medium }}>
-          <Text style={{ fontFamily: fonts.bold, color: c.gold }}>{tr('New: ', 'Nouveau : ')}</Text>
-          {tr('order personalized plates and book ServiceOntario visits right in the app.', 'commandez des plaques personnalisées et réservez vos visites ServiceOntario dans l’application.')}
-        </Txt>
       </View>
 
       <View style={styles.hero} accessibilityLabel={t('sampleDocs')}>

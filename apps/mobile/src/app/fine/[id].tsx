@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fineTone } from '../../components/FineRow';
-import { POACaseStatusCard } from '../../components/kit';
+import { Accordion, POACaseStatusCard } from '../../components/kit';
 import { OffenceNotice } from '../../components/OffenceNotice';
 import { Badge, Button, Card, Divider, ErrorState, Loading, Notice, Row, Screen, SectionHeader, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
@@ -147,10 +147,11 @@ export default function FineScreen() {
       )}
 
       {DEMO_MODE && isPOA && (
-        <>
-          <SectionHeader>{t('demoTools')}</SectionHeader>
-          <DemoCaseStatus fineId={f.id} onChanged={reload} />
-        </>
+        <Card>
+          <Accordion title={t('demoTools')} icon="construct">
+            <DemoCaseStatus fineId={f.id} onChanged={reload} />
+          </Accordion>
+        </Card>
       )}
 
       {isCamera && f.evidence && (
@@ -213,24 +214,16 @@ function DemoCaseStatus({ fineId, onChanged }: { fineId: string; onChanged: () =
   }
 
   return (
-    <Card style={{ gap: space.md }}>
-      <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'flex-start' }}>
-        <View style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(127,127,127,0.12)' }}>
-          <Ionicons name="construct" size={22} />
-        </View>
-        <View style={{ flex: 1, gap: 3 }}>
-          <Txt v="strong">{tr('Simulate a court update', 'Simuler une mise à jour judiciaire')}</Txt>
-          <Txt v="caption" muted>
-            {tr('Move this ticket’s case status to see the app react (conviction and default raise an alert).', 'Changez l’état judiciaire de cette contravention pour voir la réaction de l’application (une condamnation ou un défaut déclenche une alerte).')}
-          </Txt>
-        </View>
-      </View>
+    <>
+      <Txt v="caption" muted>
+        {tr('Move this ticket’s case status to see the app react (conviction and default raise an alert).', 'Changez l’état judiciaire de cette contravention pour voir la réaction de l’application (une condamnation ou un défaut déclenche une alerte).')}
+      </Txt>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
         {codes.map((code) => (
           <Button key={code} title={pick(POA_CASE_LABEL[code])} variant="secondary" size="md" loading={busy === code} onPress={() => flip(code)} />
         ))}
       </View>
-    </Card>
+    </>
   );
 }
 

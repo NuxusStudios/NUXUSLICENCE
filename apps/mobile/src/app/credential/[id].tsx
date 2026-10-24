@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
 import { VehiclePermitDocument } from '../../components/VehiclePermitDocument';
 import { FlipCard } from '../../components/FlipCard';
-import { LicenceStatusCard, Widget } from '../../components/kit';
+import { Accordion, LicenceStatusCard, Widget } from '../../components/kit';
 import { Button, Card, Divider, ErrorState, ListItem, Loading, Notice, Row, Screen, SectionHeader, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { DEMO_MODE, QR_REFRESH_SECONDS } from '../../lib/config';
@@ -145,10 +145,8 @@ export default function CredentialScreen() {
       {note && <Notice tone="success">{note}</Notice>}
 
       {DEMO_MODE && cred.type === 'driver_licence' && (
-        <>
-          <SectionHeader>{tr('Demo', 'Démo')}</SectionHeader>
-          <Card style={{ gap: space.sm }}>
-            <Txt v="strong">{tr('Simulate an MTO status change', 'Simuler un changement de statut du MTO')}</Txt>
+        <Card>
+          <Accordion title={tr('Demo', 'Démo')} icon="construct">
             <Txt v="caption" muted>
               {tr('Pretend the driver record reported a new status. The app picks it up automatically and alerts you.', 'Faites comme si le dossier de conduite signalait un nouveau statut. L’application le détecte automatiquement et vous alerte.')}
             </Txt>
@@ -171,8 +169,8 @@ export default function CredentialScreen() {
                 />
               ))}
             </View>
-          </Card>
-        </>
+          </Accordion>
+        </Card>
       )}
 
       <Widget title={tr('Related services', 'Services connexes')}>
