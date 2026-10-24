@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
 import { LampHero } from '../../components/LampHero';
+import { PulseButton } from '../../components/PulseButton';
 import { Accordion, Tile } from '../../components/kit';
 import { Button, Card, Divider, IconTile, PressScale, Txt, type IconName } from '../../components/ui';
 import { APP_NAME } from '../../lib/config';
@@ -73,7 +74,7 @@ export default function Welcome() {
         <Text style={styles.heroSubtitle}>{t('appTagline')}</Text>
 
         <View style={styles.heroActions}>
-          <Button title={t('getStarted')} icon="person-add" onPress={() => router.push('/register')} />
+          <PulseButton title={t('getStarted')} icon="person-add" onPress={() => router.push('/register')} />
           <PressScale onPress={() => router.push('/sign-in')} accessibilityLabel={t('signIn')} style={styles.heroSecondary}>
             <Text style={styles.heroSecondaryText}>{t('signIn')}</Text>
           </PressScale>
