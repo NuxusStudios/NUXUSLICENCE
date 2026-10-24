@@ -580,7 +580,7 @@ export function HeaderLink({ icon, label, to }: { icon: IconName; label: string;
 const styles = StyleSheet.create({
   bento: { borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: space.md, overflow: 'hidden' },
   bentoHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
-  bentoTitle: { fontFamily: fonts.semibold, fontSize: 11.5, letterSpacing: 0.8, textTransform: 'uppercase' },
+  bentoTitle: { fontFamily: fonts.medium, fontSize: 13, letterSpacing: 0 },
   bentoRow: { flexDirection: 'row', gap: space.md },
   widgetHead: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.xs, marginTop: space.sm },
   widgetBox: { borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.lg, paddingVertical: space.xs, overflow: 'hidden' },

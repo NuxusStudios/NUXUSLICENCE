@@ -1,14 +1,15 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-// Per-weight imports so only the faces we use are bundled (the package index pulls in all 18).
-import { HankenGrotesk_400Regular } from '@expo-google-fonts/hanken-grotesk/400Regular';
-import { HankenGrotesk_500Medium } from '@expo-google-fonts/hanken-grotesk/500Medium';
-import { HankenGrotesk_600SemiBold } from '@expo-google-fonts/hanken-grotesk/600SemiBold';
-import { HankenGrotesk_700Bold } from '@expo-google-fonts/hanken-grotesk/700Bold';
-import { HankenGrotesk_800ExtraBold } from '@expo-google-fonts/hanken-grotesk/800ExtraBold';
-import { IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono/500Medium';
-import { IBMPlexMono_600SemiBold } from '@expo-google-fonts/ibm-plex-mono/600SemiBold';
+// Geist + Geist Mono — the clean dashboard typeface. Per-weight imports so only
+// the faces we use are bundled.
+import { Geist_400Regular } from '@expo-google-fonts/geist/400Regular';
+import { Geist_500Medium } from '@expo-google-fonts/geist/500Medium';
+import { Geist_600SemiBold } from '@expo-google-fonts/geist/600SemiBold';
+import { Geist_700Bold } from '@expo-google-fonts/geist/700Bold';
+import { Geist_800ExtraBold } from '@expo-google-fonts/geist/800ExtraBold';
+import { GeistMono_500Medium } from '@expo-google-fonts/geist-mono/500Medium';
+import { GeistMono_600SemiBold } from '@expo-google-fonts/geist-mono/600SemiBold';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { PrototypeBanner } from '../components/PrototypeBanner';
 import { Loading } from '../components/ui';
@@ -86,13 +87,13 @@ function RootNavigator() {
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    HankenGrotesk_400Regular,
-    HankenGrotesk_500Medium,
-    HankenGrotesk_600SemiBold,
-    HankenGrotesk_700Bold,
-    HankenGrotesk_800ExtraBold,
-    IBMPlexMono_500Medium,
-    IBMPlexMono_600SemiBold,
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_600SemiBold,
+    Geist_700Bold,
+    Geist_800ExtraBold,
+    GeistMono_500Medium,
+    GeistMono_600SemiBold,
   });
   return (
     <SafeAreaProvider>

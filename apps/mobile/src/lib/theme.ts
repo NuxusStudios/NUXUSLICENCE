@@ -15,12 +15,10 @@ const light = {
   textMuted: '#5F6B7D',
   textFaint: '#8C96A6',
   border: '#E2E6EC',
-  // Lime "bento" accent: vivid lime fills carry dark-green ink; a readable deep
-  // lime is used for text/links on light surfaces.
-  primary: '#AEE63A',
-  primaryText: '#1B2A0E',
-  primarySoft: '#EAF7CF',
-  accent: '#4F7D12',
+  primary: '#16325C',
+  primaryText: '#FFFFFF',
+  primarySoft: '#E7EDF6',
+  accent: '#2F66D0',
   /** Secondary accent (lilac), for negative deltas and alt highlights. */
   lilac: '#7C4DD6',
   danger: '#C2321F',
@@ -48,10 +46,10 @@ const dark: typeof light = {
   textMuted: '#9AA6B6',
   textFaint: '#6B7686',
   border: '#232C38',
-  primary: '#C2F04D',
-  primaryText: '#13200A',
-  primarySoft: '#293311',
-  accent: '#C2F04D',
+  primary: '#9BBCFF',
+  primaryText: '#07090E',
+  primarySoft: '#17243A',
+  accent: '#9BBCFF',
   lilac: '#C4B0F5',
   danger: '#FF8F80',
   dangerBg: '#36160F',
@@ -104,13 +102,13 @@ export const radius = { sm: 10, md: 14, lg: 24, xl: 28 };
 
 /** Loaded in the root layout via expo-font. */
 export const fonts = {
-  regular: 'HankenGrotesk_400Regular',
-  medium: 'HankenGrotesk_500Medium',
-  semibold: 'HankenGrotesk_600SemiBold',
-  bold: 'HankenGrotesk_700Bold',
-  extrabold: 'HankenGrotesk_800ExtraBold',
-  mono: 'IBMPlexMono_500Medium',
-  monoBold: 'IBMPlexMono_600SemiBold',
+  regular: 'Geist_400Regular',
+  medium: 'Geist_500Medium',
+  semibold: 'Geist_600SemiBold',
+  bold: 'Geist_700Bold',
+  extrabold: 'Geist_800ExtraBold',
+  mono: 'GeistMono_500Medium',
+  monoBold: 'GeistMono_600SemiBold',
 };
 
 // Type scale. Custom faces carry their own weight, so no fontWeight here

@@ -360,7 +360,7 @@ export function Segmented<T extends string | number>({
 }) {
   const c = useTheme();
   return (
-    <View style={[styles.segmented, { backgroundColor: c.surfaceAlt }]} accessibilityRole="tablist">
+    <View style={[styles.segmented, { borderColor: c.border }]} accessibilityRole="tablist">
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -372,9 +372,9 @@ export function Segmented<T extends string | number>({
             }}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            style={[styles.segment, on && { backgroundColor: c.surface, boxShadow: c.shadow }]}
+            style={[styles.segment, on && { backgroundColor: c.text }]}
           >
-            <Text style={[styles.segmentText, { color: on ? c.text : c.textMuted, fontFamily: on ? fonts.semibold : fonts.medium }]}>{o.label}</Text>
+            <Text style={[styles.segmentText, { color: on ? c.bg : c.textMuted }]}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -590,9 +590,9 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   buttonText: { fontSize: 16, fontFamily: fonts.semibold, letterSpacing: -0.1 },
-  segmented: { flexDirection: 'row', borderRadius: radius.md, padding: 3, gap: 3 },
-  segment: { flex: 1, minHeight: 38, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm },
-  segmentText: { fontSize: 14 },
+  segmented: { flexDirection: 'row', borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, padding: 3, gap: 3 },
+  segment: { flex: 1, minHeight: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm },
+  segmentText: { fontSize: 12.5, fontFamily: fonts.mono, letterSpacing: 0.2 },
   input: { minHeight: 52, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.lg, fontSize: 16, fontFamily: fonts.medium },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.lg, paddingVertical: 7 },
   rowLabel: { flexShrink: 0, maxWidth: '45%' },
