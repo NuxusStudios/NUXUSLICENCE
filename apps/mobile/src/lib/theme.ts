@@ -29,9 +29,9 @@ const light = {
   gold: '#8A6100',
   goldBg: '#FFF6D6',
   watermark: 'rgba(255, 120, 108, 0.75)',
-  /** Card shadow; dark mode relies on a hairline border instead. */
-  shadow: '0px 8px 24px rgba(13, 21, 34, 0.07), 0px 1px 2px rgba(13, 21, 34, 0.05)',
-  shadowStrong: '0px 18px 40px rgba(13, 21, 34, 0.16)',
+  /** Elevation is used sparingly now — flat, bordered surfaces carry the UI. */
+  shadow: '0px 1px 2px rgba(13, 21, 34, 0.04), 0px 1px 3px rgba(13, 21, 34, 0.06)',
+  shadowStrong: '0px 16px 36px rgba(13, 21, 34, 0.14)',
   hairline: 'transparent',
   tabBar: '#FFFFFF',
 };

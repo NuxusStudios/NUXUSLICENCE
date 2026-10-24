@@ -175,6 +175,7 @@ export function Card({
   onPress,
   accessibilityLabel,
   flush,
+  elevated,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -182,11 +183,13 @@ export function Card({
   accessibilityLabel?: string;
   /** No inner padding, for lists that manage their own insets. */
   flush?: boolean;
+  /** Lift off the page with a soft shadow. Reserved for hero surfaces; most cards stay flat. */
+  elevated?: boolean;
 }) {
   const c = useTheme();
   const base: StyleProp<ViewStyle> = [
     styles.card,
-    { backgroundColor: c.surface, borderColor: c.hairline, boxShadow: c.shadow },
+    { backgroundColor: c.surface, borderColor: c.border, boxShadow: elevated ? c.shadow : 'none' },
     flush && { padding: 0, gap: 0 },
     style,
   ];
@@ -420,8 +423,7 @@ export function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neut
   const [bg, fg] = map[tone];
   return (
     <View style={[styles.badge, { backgroundColor: bg }]}>
-      <View style={[styles.badgeDot, { backgroundColor: fg }]} />
-      <Text style={{ color: fg, fontSize: 12, fontFamily: fonts.semibold, letterSpacing: 0.2 }}>{label}</Text>
+      <Text style={{ color: fg, fontSize: 11.5, fontFamily: fonts.semibold, letterSpacing: 0.2 }}>{label}</Text>
     </View>
   );
 }

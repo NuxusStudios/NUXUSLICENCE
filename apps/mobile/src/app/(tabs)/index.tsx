@@ -19,8 +19,6 @@ export default function Home() {
   const { width } = useWindowDimensions();
   const { data, error, loading, reload } = useAsync(() => Promise.all([api.me(), api.wallet(), api.appointments(), api.serviceRequests(), api.consents()]));
   const [hideAmounts, setHideAmounts] = useState(false);
-  const [bannerOpen, setBannerOpen] = useState(true);
-  const [surveyOpen, setSurveyOpen] = useState(true);
 
   if (!data && loading) return <Loading />;
   if (!data && error) return <ErrorState error={error} onRetry={reload} />;
@@ -56,37 +54,17 @@ export default function Home() {
 
   return (
     <Screen refreshing={loading} onRefresh={reload} title={`${greeting}, ${person.givenNames.split(' ')[0]}`} subtitle={today.charAt(0).toUpperCase() + today.slice(1)} right={bell}>
-      <View style={[styles.idStrip, { backgroundColor: c.successBg }]} accessibilityRole="summary">
-        <Ionicons name="shield-checkmark" size={18} color={c.success} />
-        <Txt v="caption" color={c.success} style={{ fontFamily: fonts.semibold, flex: 1 }}>
-          {tr('Digital ID verified', 'Identité numérique vérifiée')} · {me.account.identityAssurance}
-        </Txt>
-        <Txt v="caption" color={c.success} style={{ fontFamily: fonts.medium }}>
-          {person.licenceNumber}
-        </Txt>
-      </View>
-
-      {/* The licence's live status, so opening the app is enough to know it's valid. */}
+      {/* One quiet line: identity is verified and the licence is live-valid. */}
       {licence && (
-        <PressScale onPress={() => router.push(`/credential/${licence.id}`)} accessibilityLabel={tr('Driver’s licence status', 'Statut du permis de conduire')} style={[styles.statusRow, { backgroundColor: c.surface, borderColor: c.hairline, boxShadow: c.shadow }]}>
-          <Ionicons name="card" size={20} color={c.textMuted} />
-          <Txt v="strong" style={{ flex: 1 }}>
-            {tr('Driver’s licence', 'Permis de conduire')}
-          </Txt>
+        <PressScale onPress={() => router.push(`/credential/${licence.id}`)} accessibilityLabel={tr('Driver’s licence status', 'Statut du permis de conduire')} style={[styles.statusRow, { backgroundColor: c.surfaceAlt }]}>
+          <Ionicons name="shield-checkmark" size={18} color={c.success} />
+          <View style={{ flex: 1 }}>
+            <Txt v="strong">{tr('Driver’s licence', 'Permis de conduire')}</Txt>
+            <Txt v="caption" faint>{person.licenceNumber}</Txt>
+          </View>
           <LicenceStatusPill status={licence.licenceStatus} />
           <Ionicons name="chevron-forward" size={17} color={c.textFaint} />
         </PressScale>
-      )}
-
-      {bannerOpen && (
-        <View style={[styles.banner, { backgroundColor: c.goldBg }]}>
-          <Ionicons name="sparkles" size={18} color={c.gold} />
-          <Txt v="caption" style={{ flex: 1, fontFamily: fonts.medium }} onPress={() => router.push('/plates')}>
-            <Text style={{ fontFamily: fonts.bold, color: c.gold }}>{tr('New: ', 'Nouveau : ')}</Text>
-            {tr('check and order personalized plates right in the app.', 'vérifiez et commandez des plaques personnalisées dans l’application.')}
-          </Txt>
-          <Ionicons name="close" size={18} color={c.textMuted} onPress={() => setBannerOpen(false)} accessibilityLabel={tr('Dismiss', 'Fermer')} />
-        </View>
       )}
 
       <Widget title={tr('Needs your attention', 'À faire')}>
@@ -191,23 +169,6 @@ export default function Home() {
         )}
       </Widget>
 
-      {surveyOpen && (
-        <Card style={{ gap: space.sm, borderRadius: radius.lg }}>
-          <Badge label={tr('Survey', 'Sondage')} tone="info" />
-          <Txt v="headline">{tr('Share your experience', 'Donnez votre avis')}</Txt>
-          <Txt v="callout" muted>
-            {tr('Two questions to help us improve the app.', 'Deux questions pour nous aider à améliorer l’application.')}
-          </Txt>
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <View style={{ flex: 1 }}>
-              <Button title={tr('Take part', 'Participer')} size="md" onPress={() => router.push('/help/rate')} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Button title={tr('Later', 'Plus tard')} size="md" variant="secondary" onPress={() => setSurveyOpen(false)} />
-            </View>
-          </View>
-        </Card>
-      )}
     </Screen>
   );
 }
@@ -216,9 +177,7 @@ const styles = StyleSheet.create({
   bell: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
   bellDot: { position: 'absolute', top: -2, right: -2, minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, borderWidth: 2 },
   bellDotText: { color: '#fff', fontSize: 11, fontFamily: fonts.bold },
-  idStrip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md, paddingVertical: 10, borderRadius: radius.md, marginTop: -space.sm },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md, paddingVertical: space.md, borderRadius: radius.md, borderWidth: 1 },
-  banner: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md, paddingVertical: space.md, borderRadius: radius.md },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.md, paddingVertical: space.md, borderRadius: radius.md, marginTop: -space.xs },
   dueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   amount: { fontFamily: fonts.extrabold, fontSize: 38, lineHeight: 44, letterSpacing: -1.2, fontVariant: ['tabular-nums'] },
   eye: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
