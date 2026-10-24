@@ -294,6 +294,8 @@ export function Button({
   size?: 'lg' | 'md';
 }) {
   const c = useTheme();
+  const dark = useIsDark();
+  const reduce = useReduceTransparency();
   const palette = {
     primary: { bg: c.primary, fg: c.primaryText, border: c.primary },
     secondary: { bg: c.surface, fg: c.text, border: c.border },
@@ -304,6 +306,9 @@ export function Button({
   }[variant];
   const inactive = disabled || loading;
   const isGlass = variant === 'glass';
+  const isPrimary = variant === 'primary';
+  // primary is a tinted "glassProminent" pill; glass is a clear glass pill.
+  const material = (isGlass || isPrimary) && !reduce;
   const brad = size === 'md' ? radius.sm : radius.md;
   return (
     <PressScale
@@ -314,15 +319,21 @@ export function Button({
       style={[
         styles.button,
         size === 'md' && { minHeight: 44, borderRadius: radius.sm },
-        isGlass ? { borderColor: 'transparent', overflow: 'hidden' } : { backgroundColor: palette.bg, borderColor: palette.border },
+        isGlass || isPrimary
+          ? { overflow: 'hidden', borderColor: isGlass && reduce ? c.border : 'transparent', backgroundColor: isPrimary && reduce ? c.primary : isGlass && reduce ? c.surface : 'transparent' }
+          : { backgroundColor: palette.bg, borderColor: palette.border },
         { opacity: inactive ? 0.5 : 1 },
-        variant === 'primary' && !inactive && { boxShadow: c.shadow },
+        isPrimary && !inactive && { boxShadow: c.shadow },
       ]}
     >
-      {/* Liquid-glass fill for the glass variant. */}
-      {isGlass && <Glass intensity={40} style={StyleSheet.absoluteFill} />}
-      {/* Specular sheen across the top half of the primary CTA. */}
-      {variant === 'primary' && !inactive && (
+      {/* Blur base for the material (glass) buttons. */}
+      {material && <BlurView intensity={isPrimary ? 22 : 36} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} pointerEvents="none" />}
+      {/* Accent tint for the prominent (primary) glass; neutral wash for clear glass. */}
+      {isPrimary && !reduce && <View style={[StyleSheet.absoluteFill, { backgroundColor: c.primary, opacity: 0.82 }]} pointerEvents="none" />}
+      {isGlass && !reduce && <View style={[StyleSheet.absoluteFill, { backgroundColor: dark ? 'rgba(18,24,32,0.5)' : 'rgba(255,255,255,0.5)' }]} pointerEvents="none" />}
+      {/* Bright top rim + specular sheen. */}
+      {material && <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: dark ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.85)' }} pointerEvents="none" />}
+      {isPrimary && !inactive && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '52%', borderTopLeftRadius: brad, borderTopRightRadius: brad, backgroundColor: 'rgba(255,255,255,0.14)' }} pointerEvents="none" />
       )}
       {loading ? (

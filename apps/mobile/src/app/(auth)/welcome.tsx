@@ -1,9 +1,10 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
+import { LampHero } from '../../components/LampHero';
 import { Accordion, Tile } from '../../components/kit';
-import { Button, Card, Divider, IconTile, Txt, type IconName } from '../../components/ui';
+import { Button, Card, Divider, IconTile, PressScale, Txt, type IconName } from '../../components/ui';
 import { APP_NAME } from '../../lib/config';
 import { useI18n } from '../../lib/i18n';
 import { FAQ } from '../../lib/shared/platform';
@@ -52,17 +53,32 @@ export default function Welcome() {
   ];
   return (
     <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={styles.wrap}>
-      <View style={styles.top}>
-        <View style={styles.brand}>
-          <View style={[styles.logo, { backgroundColor: c.primary }]}>
-            <Ionicons name="shield-checkmark" size={17} color={c.primaryText} />
+      <LampHero
+        style={{ marginHorizontal: -space.xl, marginTop: -space.sm }}
+        header={
+          <View style={styles.heroBrand}>
+            <View style={styles.brand}>
+              <View style={styles.logo}>
+                <Ionicons name="shield-checkmark" size={16} color="#fff" />
+              </View>
+              <Text style={styles.brandText}>{APP_NAME}</Text>
+            </View>
+            <PressScale onPress={() => setLang(lang === 'en' ? 'fr' : 'en')} accessibilityLabel={lang === 'en' ? 'Français' : 'English'} style={styles.langPill}>
+              <Text style={styles.langText}>{lang === 'en' ? 'Français' : 'English'}</Text>
+            </PressScale>
           </View>
-          <Txt v="headline" style={{ fontFamily: fonts.extrabold }}>
-            {APP_NAME}
-          </Txt>
+        }
+      >
+        <Text style={styles.heroTitle}>{t('welcomeHeadline')}</Text>
+        <Text style={styles.heroSubtitle}>{t('appTagline')}</Text>
+
+        <View style={styles.heroActions}>
+          <Button title={t('getStarted')} icon="person-add" onPress={() => router.push('/register')} />
+          <PressScale onPress={() => router.push('/sign-in')} accessibilityLabel={t('signIn')} style={styles.heroSecondary}>
+            <Text style={styles.heroSecondaryText}>{t('signIn')}</Text>
+          </PressScale>
         </View>
-        <Button title={lang === 'en' ? 'Français' : 'English'} variant="ghost" size="md" onPress={() => setLang(lang === 'en' ? 'fr' : 'en')} />
-      </View>
+      </LampHero>
 
       <View style={styles.hero} accessibilityLabel={t('sampleDocs')}>
         {SAMPLES.map((cred, i) => (
@@ -70,20 +86,6 @@ export default function Welcome() {
             <DocumentCard credential={cred} compact={i < 2} animated={i === 2} />
           </View>
         ))}
-      </View>
-
-      <View style={{ gap: space.md }}>
-        <Txt v="display" accessibilityRole="header" style={{ fontSize: 32, lineHeight: 37 }}>
-          {t('welcomeHeadline')}
-        </Txt>
-        <Txt v="body" muted>
-          {t('appTagline')}
-        </Txt>
-      </View>
-
-      <View style={{ gap: space.sm }}>
-        <Button title={t('getStarted')} icon="person-add" onPress={() => router.push('/register')} />
-        <Button title={t('signIn')} variant="secondary" onPress={() => router.push('/sign-in')} />
       </View>
 
       <View style={{ gap: space.md }}>
@@ -169,10 +171,17 @@ export default function Welcome() {
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: space.xl, paddingTop: space.sm, paddingBottom: space.xxl * 2, gap: space.xl, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroBrand: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  logo: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  announce: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, borderRadius: 14, marginTop: -space.md },
+  logo: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.35)' },
+  brandText: { color: '#fff', fontFamily: fonts.extrabold, fontSize: 18, letterSpacing: -0.2 },
+  langPill: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'rgba(255,255,255,0.06)' },
+  langText: { color: '#fff', fontFamily: fonts.semibold, fontSize: 13 },
+  heroTitle: { color: '#F3F7FF', fontFamily: fonts.extrabold, fontSize: 36, lineHeight: 41, letterSpacing: -1, textAlign: 'center' },
+  heroSubtitle: { color: 'rgba(233,240,255,0.72)', fontFamily: fonts.regular, fontSize: 16, lineHeight: 23, textAlign: 'center', maxWidth: 380, marginTop: space.md },
+  heroActions: { width: '100%', maxWidth: 360, gap: space.sm, marginTop: space.xl },
+  heroSecondary: { minHeight: 54, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.32)', backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
+  heroSecondaryText: { color: '#fff', fontFamily: fonts.semibold, fontSize: 16, letterSpacing: -0.1 },
   hero: { height: 250, alignItems: 'center', justifyContent: 'center' },
   fanCard: { position: 'absolute', width: '84%', maxWidth: 360 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: space.md },
