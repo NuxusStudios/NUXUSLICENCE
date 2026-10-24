@@ -15,10 +15,14 @@ const light = {
   textMuted: '#5F6B7D',
   textFaint: '#8C96A6',
   border: '#E2E6EC',
-  primary: '#16325C',
-  primaryText: '#FFFFFF',
-  primarySoft: '#E7EDF6',
-  accent: '#2F66D0',
+  // Lime "bento" accent: vivid lime fills carry dark-green ink; a readable deep
+  // lime is used for text/links on light surfaces.
+  primary: '#AEE63A',
+  primaryText: '#1B2A0E',
+  primarySoft: '#EAF7CF',
+  accent: '#4F7D12',
+  /** Secondary accent (lilac), for negative deltas and alt highlights. */
+  lilac: '#7C4DD6',
   danger: '#C2321F',
   dangerBg: '#FCEDEA',
   warning: '#9C5A00',
@@ -44,10 +48,11 @@ const dark: typeof light = {
   textMuted: '#9AA6B6',
   textFaint: '#6B7686',
   border: '#232C38',
-  primary: '#9BBCFF',
-  primaryText: '#07090E',
-  primarySoft: '#17243A',
-  accent: '#9BBCFF',
+  primary: '#C2F04D',
+  primaryText: '#13200A',
+  primarySoft: '#293311',
+  accent: '#C2F04D',
+  lilac: '#C4B0F5',
   danger: '#FF8F80',
   dangerBg: '#36160F',
   warning: '#F5B655',
@@ -95,7 +100,7 @@ export function useIsDark(): boolean {
 }
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
-export const radius = { sm: 10, md: 14, lg: 20, xl: 28 };
+export const radius = { sm: 10, md: 14, lg: 24, xl: 28 };
 
 /** Loaded in the root layout via expo-font. */
 export const fonts = {

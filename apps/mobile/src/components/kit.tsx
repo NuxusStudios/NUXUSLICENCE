@@ -39,12 +39,12 @@ export function Widget({
   return (
     <View style={{ gap: space.sm }}>
       <View style={styles.widgetHead}>
-        <View style={{ flex: 1, gap: 1 }}>
-          <Txt v="headline" accessibilityRole="header">
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[styles.bentoTitle, { color: c.textMuted }]} accessibilityRole="header">
             {title}
-          </Txt>
+          </Text>
           {subtitle ? (
-            <Txt v="caption" muted>
+            <Txt v="caption" faint>
               {subtitle}
             </Txt>
           ) : null}
@@ -57,7 +57,7 @@ export function Widget({
           </Pressable>
         ) : null}
       </View>
-      {flush ? children : <Card style={{ paddingVertical: space.xs }}>{children}</Card>}
+      {flush ? children : <View style={[styles.widgetBox, { backgroundColor: c.surface, borderColor: c.border }]}>{children}</View>}
     </View>
   );
 }
@@ -582,7 +582,8 @@ const styles = StyleSheet.create({
   bentoHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
   bentoTitle: { fontFamily: fonts.semibold, fontSize: 11.5, letterSpacing: 0.8, textTransform: 'uppercase' },
   bentoRow: { flexDirection: 'row', gap: space.md },
-  widgetHead: { flexDirection: 'row', alignItems: 'flex-end', gap: space.md, paddingHorizontal: 2, marginTop: space.sm },
+  widgetHead: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.xs, marginTop: space.sm },
+  widgetBox: { borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.lg, paddingVertical: space.xs, overflow: 'hidden' },
   tile: { alignItems: 'center', gap: 6, paddingHorizontal: 2, paddingVertical: space.xs },
   tileBadge: { position: 'absolute', top: -4, right: -6, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2 },
   tileBadgeText: { color: '#fff', fontSize: 10, fontFamily: fonts.bold },
