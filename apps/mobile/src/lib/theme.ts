@@ -8,17 +8,19 @@ import type { CredentialType } from './types';
 // is commissioned. No screen hard-codes colours.
 
 const light = {
-  bg: '#F2F3F6',
+  // Sanad surface model: a white page, with soft grey "filled" cards that carry
+  // no visible border (the contrast comes from the fill, not an outline).
+  bg: '#FFFFFF',
   surface: '#FFFFFF',
-  surfaceAlt: '#EFF1F5',
+  surfaceAlt: '#F2F4F8',
   text: '#0D1522',
   textMuted: '#5F6B7D',
   textFaint: '#8C96A6',
-  border: '#E2E6EC',
+  border: '#E6E9EF',
   primary: '#16325C',
   primaryText: '#FFFFFF',
-  primarySoft: '#E7EDF6',
-  accent: '#2F66D0',
+  primarySoft: '#E8EFFD',
+  accent: '#2563EB',
   /** Secondary accent (lilac), for negative deltas and alt highlights. */
   lilac: '#7C4DD6',
   danger: '#C2321F',
@@ -98,7 +100,7 @@ export function useIsDark(): boolean {
 }
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
-export const radius = { sm: 10, md: 14, lg: 24, xl: 28 };
+export const radius = { sm: 10, md: 14, lg: 20, xl: 28 };
 
 /** Loaded in the root layout via expo-font. */
 export const fonts = {
@@ -117,6 +119,8 @@ export const type = {
   display: { fontFamily: fonts.extrabold, fontSize: 34, lineHeight: 40, letterSpacing: -0.9 },
   title: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 32, letterSpacing: -0.6 },
   headline: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 24, letterSpacing: -0.2 },
+  /** Bold black section heading (Sanad "Favorite Cards", "Quick Access"). */
+  section: { fontFamily: fonts.bold, fontSize: 19, lineHeight: 24, letterSpacing: -0.4 },
   body: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 23 },
   callout: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 21 },
   strong: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 21 },

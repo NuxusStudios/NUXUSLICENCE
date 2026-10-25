@@ -71,7 +71,7 @@ export function Body({ children, muted, style }: { children: ReactNode; muted?: 
 export function SectionHeader({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <View style={styles.sectionHeader}>
-      <Txt v="label" muted accessibilityRole="header">
+      <Txt v="section" accessibilityRole="header">
         {children}
       </Txt>
       {action}
@@ -189,9 +189,13 @@ export function Card({
   elevated?: boolean;
 }) {
   const c = useTheme();
+  // Sanad cards are soft grey "fills" with no visible border. `elevated` opts
+  // into a raised white card (surface + hairline + shadow) for hero surfaces.
   const base: StyleProp<ViewStyle> = [
     styles.card,
-    { backgroundColor: c.surface, borderColor: c.border, boxShadow: elevated ? c.shadow : 'none' },
+    elevated
+      ? { backgroundColor: c.surface, borderColor: c.border, borderWidth: StyleSheet.hairlineWidth, boxShadow: c.shadow }
+      : { backgroundColor: c.surfaceAlt, borderColor: 'transparent' },
     flush && { padding: 0, gap: 0 },
     style,
   ];
@@ -592,7 +596,7 @@ const styles = StyleSheet.create({
   buttonText: { fontSize: 16, fontFamily: fonts.semibold, letterSpacing: -0.1 },
   segmented: { flexDirection: 'row', borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, padding: 3, gap: 3 },
   segment: { flex: 1, minHeight: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm },
-  segmentText: { fontSize: 12.5, fontFamily: fonts.mono, letterSpacing: 0.2 },
+  segmentText: { fontSize: 13.5, fontFamily: fonts.semibold, letterSpacing: 0 },
   input: { minHeight: 52, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.lg, fontSize: 16, fontFamily: fonts.medium },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.lg, paddingVertical: 7 },
   rowLabel: { flexShrink: 0, maxWidth: '45%' },

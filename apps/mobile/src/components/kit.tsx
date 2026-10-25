@@ -40,9 +40,9 @@ export function Widget({
     <View style={{ gap: space.sm }}>
       <View style={styles.widgetHead}>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[styles.bentoTitle, { color: c.textMuted }]} accessibilityRole="header">
+          <Txt v="section" accessibilityRole="header">
             {title}
-          </Text>
+          </Txt>
           {subtitle ? (
             <Txt v="caption" faint>
               {subtitle}
@@ -57,7 +57,7 @@ export function Widget({
           </Pressable>
         ) : null}
       </View>
-      {flush ? children : <View style={[styles.widgetBox, { backgroundColor: c.surface, borderColor: c.border }]}>{children}</View>}
+      {flush ? children : <View style={[styles.widgetBox, { backgroundColor: c.surfaceAlt }]}>{children}</View>}
     </View>
   );
 }
@@ -88,7 +88,7 @@ export function BentoTile({
 }) {
   const c = useTheme();
   const headColor = accent ? c.primaryText : c.textMuted;
-  const tileStyle: StyleProp<ViewStyle> = [styles.bento, { backgroundColor: accent ? c.primary : c.surface, borderColor: accent ? 'transparent' : c.border }, !pad && { padding: 0 }, style];
+  const tileStyle: StyleProp<ViewStyle> = [styles.bento, { backgroundColor: accent ? c.primary : c.surfaceAlt, borderColor: 'transparent' }, !pad && { padding: 0 }, style];
   const body = (
     <>
       {title || (action && onAction) ? (
@@ -152,10 +152,10 @@ export function Chip({ label, on, onPress, icon }: { label: string; on?: boolean
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: !!on }}
-      style={[styles.chip, { borderColor: on ? c.accent : c.border, backgroundColor: on ? c.primarySoft : c.surface }]}
+      style={[styles.chip, { borderColor: on ? c.accent : c.border, backgroundColor: 'transparent' }]}
     >
       {icon ? <Ionicons name={icon} size={15} color={on ? c.accent : c.textMuted} /> : null}
-      <Text style={{ color: on ? c.accent : c.text, fontFamily: on ? fonts.semibold : fonts.medium, fontSize: 14 }}>{label}</Text>
+      <Text style={{ color: on ? c.accent : c.textMuted, fontFamily: on ? fonts.semibold : fonts.medium, fontSize: 14 }}>{label}</Text>
     </Pressable>
   );
 }
@@ -167,7 +167,7 @@ export function ChipRow({ children }: { children: ReactNode }) {
 export function SearchField({ value, onChangeText, placeholder }: { value: string; onChangeText: (v: string) => void; placeholder: string }) {
   const c = useTheme();
   return (
-    <View style={[styles.search, { backgroundColor: c.surface, borderColor: c.border }]}>
+    <View style={[styles.search, { backgroundColor: c.surfaceAlt }]}>
       <Ionicons name="search" size={18} color={c.textFaint} />
       <TextInput
         value={value}
@@ -578,18 +578,18 @@ export function HeaderLink({ icon, label, to }: { icon: IconName; label: string;
 }
 
 const styles = StyleSheet.create({
-  bento: { borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: space.md, overflow: 'hidden' },
+  bento: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: space.md, overflow: 'hidden' },
   bentoHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
   bentoTitle: { fontFamily: fonts.medium, fontSize: 13, letterSpacing: 0 },
   bentoRow: { flexDirection: 'row', gap: space.md },
   widgetHead: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.xs, marginTop: space.sm },
-  widgetBox: { borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.lg, paddingVertical: space.xs, overflow: 'hidden' },
+  widgetBox: { borderRadius: 22, paddingHorizontal: space.lg, paddingVertical: space.xs, overflow: 'hidden' },
   tile: { alignItems: 'center', gap: 6, paddingHorizontal: 2, paddingVertical: space.xs },
   tileBadge: { position: 'absolute', top: -4, right: -6, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2 },
   tileBadgeText: { color: '#fff', fontSize: 10, fontFamily: fonts.bold },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1.5 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  search: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.md },
+  search: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderRadius: 999, paddingHorizontal: space.lg },
   check: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start', paddingHorizontal: 2 },
   accHead: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md, minHeight: 52 },
   stepNum: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
