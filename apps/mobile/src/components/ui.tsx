@@ -197,7 +197,7 @@ export function Card({
   // uses a slightly denser material for hero surfaces.
   const cardStyle: StyleProp<ViewStyle> = [styles.card, flush && { padding: 0, gap: 0 }, style];
   const inner = (
-    <Glass intensity={elevated ? 60 : 42} style={cardStyle}>
+    <Glass intensity={elevated ? 82 : 62} style={cardStyle}>
       {children}
     </Glass>
   );
@@ -247,7 +247,7 @@ export function useReduceTransparency(): boolean {
 export function Glass({
   children,
   style,
-  intensity = 44,
+  intensity = 60,
   rim = true,
 }: {
   children?: ReactNode;
@@ -262,9 +262,18 @@ export function Glass({
     return <View style={[{ backgroundColor: c.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, overflow: 'hidden' }, style]}>{children}</View>;
   }
   return (
-    <View style={[{ overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, boxShadow: c.shadow }, style]}>
+    <View style={[{ overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassRim, boxShadow: c.shadowStrong }, style]}>
       <BlurView intensity={intensity} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: c.glass }]} pointerEvents="none" />
+      {/* Specular sheen: a bright diagonal highlight that sells the glass even over a flat backdrop. */}
+      <LinearGradient
+        colors={[c.glassSheen, 'transparent', 'transparent']}
+        locations={[0, 0.5, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       {rim ? <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: c.glassRim }} pointerEvents="none" /> : null}
       {children}
     </View>
@@ -277,26 +286,30 @@ export function Glass({
  */
 export function AmbientBackground() {
   const c = useTheme();
+  // Several large overlapping glows blanket the viewport so a frosted panel
+  // anywhere on screen has a gradient to refract (that's what makes it read as
+  // glass, not a flat card).
+  const glows = [
+    { id: 'g1', cx: '12%', cy: '2%', r: '60%', col: c.glow1 },
+    { id: 'g2', cx: '96%', cy: '12%', r: '55%', col: c.glow2 },
+    { id: 'g3', cx: '2%', cy: '48%', r: '55%', col: c.glow3 },
+    { id: 'g4', cx: '100%', cy: '62%', r: '60%', col: c.glow1 },
+    { id: 'g5', cx: '50%', cy: '100%', r: '65%', col: c.glow2 },
+  ];
   return (
     <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs>
-        <RadialGradient id="glow1" cx="14%" cy="4%" r="60%">
-          <Stop offset="0" stopColor={c.glow1} />
-          <Stop offset="1" stopColor={c.glow1} stopOpacity="0" />
-        </RadialGradient>
-        <RadialGradient id="glow2" cx="94%" cy="16%" r="55%">
-          <Stop offset="0" stopColor={c.glow2} />
-          <Stop offset="1" stopColor={c.glow2} stopOpacity="0" />
-        </RadialGradient>
-        <RadialGradient id="glow3" cx="48%" cy="98%" r="65%">
-          <Stop offset="0" stopColor={c.glow3} />
-          <Stop offset="1" stopColor={c.glow3} stopOpacity="0" />
-        </RadialGradient>
+        {glows.map((g) => (
+          <RadialGradient key={g.id} id={g.id} cx={g.cx} cy={g.cy} r={g.r}>
+            <Stop offset="0" stopColor={g.col} />
+            <Stop offset="1" stopColor={g.col} stopOpacity="0" />
+          </RadialGradient>
+        ))}
       </Defs>
       <Rect x="0" y="0" width="100%" height="100%" fill={c.bg} />
-      <Rect x="0" y="0" width="100%" height="100%" fill="url(#glow1)" />
-      <Rect x="0" y="0" width="100%" height="100%" fill="url(#glow2)" />
-      <Rect x="0" y="0" width="100%" height="100%" fill="url(#glow3)" />
+      {glows.map((g) => (
+        <Rect key={g.id} x="0" y="0" width="100%" height="100%" fill={`url(#${g.id})`} />
+      ))}
     </Svg>
   );
 }

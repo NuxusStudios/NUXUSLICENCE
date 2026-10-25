@@ -41,12 +41,14 @@ const light = {
   hairline: 'rgba(255,255,255,0.6)',
   tabBar: 'transparent',
   /** Frosted-panel wash + bright rim used by the Glass material. */
-  glass: 'rgba(255,255,255,0.55)',
-  glassRim: 'rgba(255,255,255,0.9)',
+  glass: 'rgba(255,255,255,0.44)',
+  glassRim: 'rgba(255,255,255,0.95)',
+  /** Specular sheen painted across each glass panel. */
+  glassSheen: 'rgba(255,255,255,0.45)',
   /** Ambient colour glows painted behind the glass. */
-  glow1: 'rgba(91,141,239,0.45)',
-  glow2: 'rgba(168,85,247,0.38)',
-  glow3: 'rgba(45,212,191,0.30)',
+  glow1: 'rgba(91,141,239,0.55)',
+  glow2: 'rgba(168,85,247,0.48)',
+  glow3: 'rgba(45,212,191,0.40)',
   /** Accent gradient stops. */
   gradFrom: '#3B7BF6',
   gradTo: '#8B5CF6',
@@ -82,11 +84,12 @@ const dark: typeof light = {
   shadowStrong: '0px 24px 60px rgba(0,0,0,0.6)',
   hairline: 'rgba(255,255,255,0.12)',
   tabBar: 'transparent',
-  glass: 'rgba(18,19,24,0.55)',
-  glassRim: 'rgba(255,255,255,0.18)',
-  glow1: 'rgba(255,255,255,0.10)',
-  glow2: 'rgba(255,255,255,0.07)',
-  glow3: 'rgba(255,255,255,0.05)',
+  glass: 'rgba(38,40,48,0.44)',
+  glassRim: 'rgba(255,255,255,0.28)',
+  glassSheen: 'rgba(255,255,255,0.10)',
+  glow1: 'rgba(255,255,255,0.18)',
+  glow2: 'rgba(255,255,255,0.13)',
+  glow3: 'rgba(255,255,255,0.10)',
   gradFrom: '#EDEFF4',
   gradTo: '#C7CBD6',
 };
