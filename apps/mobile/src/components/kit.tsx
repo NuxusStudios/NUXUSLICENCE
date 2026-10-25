@@ -7,7 +7,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { Badge, Button, Card, IconTile, Notice, PressScale, Txt, type IconName } from './ui';
+import { Badge, Button, Card, Glass, IconTile, Notice, PressScale, Txt, type IconName } from './ui';
 import { DEMO_MODE } from '../lib/config';
 import { DEMO_PIN } from '../lib/demo/backend';
 import { date, dateTime, money, timeAgo } from '../lib/format';
@@ -59,7 +59,7 @@ export function Widget({
           </Pressable>
         ) : null}
       </View>
-      {flush ? children : <View style={[styles.widgetBox, { backgroundColor: c.surfaceAlt }]}>{children}</View>}
+      {flush ? children : <Glass style={styles.widgetBox}>{children}</Glass>}
     </View>
   );
 }
@@ -90,12 +90,12 @@ export function BentoTile({
 }) {
   const c = useTheme();
   const headColor = accent ? c.primaryText : c.textMuted;
-  const tileStyle: StyleProp<ViewStyle> = [styles.bento, { backgroundColor: accent ? c.primary : c.surfaceAlt, borderColor: 'transparent' }, !pad && { padding: 0 }, style];
+  const tileStyle: StyleProp<ViewStyle> = [styles.bento, !pad && { padding: 0 }, style];
   const body = (
     <>
       {title || (action && onAction) ? (
         <View style={styles.bentoHead}>
-          {title ? <Text style={[styles.bentoTitle, { color: headColor, opacity: accent ? 0.85 : 1 }]}>{title}</Text> : <View />}
+          {title ? <Text style={[styles.bentoTitle, { color: headColor, opacity: accent ? 0.9 : 1 }]}>{title}</Text> : <View />}
           {action && onAction ? (
             <Pressable onPress={onAction} accessibilityRole="link" hitSlop={8}>
               <Txt v="strong" color={accent ? c.primaryText : c.accent}>
@@ -108,14 +108,22 @@ export function BentoTile({
       {children}
     </>
   );
+  // Accent tiles are a vibrant gradient; the rest are frosted glass.
+  const shell = accent ? (
+    <LinearGradient colors={[c.gradFrom, c.gradTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={tileStyle}>
+      {body}
+    </LinearGradient>
+  ) : (
+    <Glass style={tileStyle}>{body}</Glass>
+  );
   if (onPress) {
     return (
-      <PressScale onPress={onPress} style={tileStyle} scaleTo={0.99}>
-        {body}
+      <PressScale onPress={onPress} scaleTo={0.99}>
+        {shell}
       </PressScale>
     );
   }
-  return <View style={tileStyle}>{body}</View>;
+  return shell;
 }
 
 /** A row of bento tiles that share a line (each child flexes to fill). */
@@ -177,11 +185,11 @@ export function QuickTile({ icon, label, onPress, badge, highlight }: { icon: Ic
   return (
     <PressScale onPress={onPress} containerStyle={{ flex: 1 }} accessibilityLabel={badge ? `${label}, ${badge}` : label}>
       {highlight ? (
-        <LinearGradient colors={['#3B7BF6', '#7C4DD6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.quickTile}>
+        <LinearGradient colors={[c.gradFrom, c.gradTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.quickTile}>
           {body}
         </LinearGradient>
       ) : (
-        <View style={[styles.quickTile, { backgroundColor: c.surfaceAlt }]}>{body}</View>
+        <Glass style={styles.quickTile}>{body}</Glass>
       )}
     </PressScale>
   );
@@ -214,22 +222,26 @@ export function DocumentTile({ credential, onPress }: { credential: Credential; 
     ? { expired: tr('Expired', 'Expiré'), suspended: tr('Suspended', 'Suspendu'), revoked: tr('Revoked', 'Révoqué') }[credential.status as 'expired' | 'suspended' | 'revoked']
     : `${tr('Exp.', 'Exp.')} ${date(credential.expiresOn, lang)}`;
   return (
-    <PressScale onPress={onPress} containerStyle={{ flex: 1 }} style={[styles.docTile, { backgroundColor: hexA(ink, 0.1) }]} accessibilityLabel={t(credential.type)}>
-      <View style={[styles.docIcon, { backgroundColor: hexA(ink, 0.16) }]}>
-        <Ionicons name={DOC_ICON[credential.type]} size={19} color={ink} />
-      </View>
-      <View style={{ gap: 2 }}>
-        <Txt v="strong" numberOfLines={2}>
-          {t(credential.type)}
-        </Txt>
-        <Txt v="caption" faint numberOfLines={1}>
-          {credential.documentNumber}
-        </Txt>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-        <Ionicons name={bad ? 'alert-circle' : 'time-outline'} size={13} color={bad ? c.danger : c.textMuted} />
-        <Text style={{ fontFamily: fonts.semibold, fontSize: 11.5, color: bad ? c.danger : c.textMuted }}>{statusText}</Text>
-      </View>
+    <PressScale onPress={onPress} containerStyle={{ flex: 1 }} accessibilityLabel={t(credential.type)}>
+      <Glass style={styles.docTile}>
+        {/* A faint colour wash tints the frosted panel per document type. */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: hexA(ink, 0.16) }]} pointerEvents="none" />
+        <View style={[styles.docIcon, { backgroundColor: hexA(ink, 0.28) }]}>
+          <Ionicons name={DOC_ICON[credential.type]} size={19} color={ink} />
+        </View>
+        <View style={{ gap: 2 }}>
+          <Txt v="strong" numberOfLines={2}>
+            {t(credential.type)}
+          </Txt>
+          <Txt v="caption" faint numberOfLines={1}>
+            {credential.documentNumber}
+          </Txt>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Ionicons name={bad ? 'alert-circle' : 'time-outline'} size={13} color={bad ? c.danger : c.textMuted} />
+          <Text style={{ fontFamily: fonts.semibold, fontSize: 11.5, color: bad ? c.danger : c.textMuted }}>{statusText}</Text>
+        </View>
+      </Glass>
     </PressScale>
   );
 }
@@ -260,7 +272,7 @@ export function ChipRow({ children }: { children: ReactNode }) {
 export function SearchField({ value, onChangeText, placeholder }: { value: string; onChangeText: (v: string) => void; placeholder: string }) {
   const c = useTheme();
   return (
-    <View style={[styles.search, { backgroundColor: c.surfaceAlt }]}>
+    <Glass style={styles.search}>
       <Ionicons name="search" size={18} color={c.textFaint} />
       <TextInput
         value={value}
@@ -276,7 +288,7 @@ export function SearchField({ value, onChangeText, placeholder }: { value: strin
           <Ionicons name="close-circle" size={18} color={c.textFaint} />
         </Pressable>
       ) : null}
-    </View>
+    </Glass>
   );
 }
 
@@ -671,7 +683,7 @@ export function HeaderLink({ icon, label, to }: { icon: IconName; label: string;
 }
 
 const styles = StyleSheet.create({
-  bento: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: space.md, overflow: 'hidden' },
+  bento: { borderRadius: 22, padding: space.lg, gap: space.md, overflow: 'hidden' },
   bentoHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
   bentoTitle: { fontFamily: fonts.medium, fontSize: 13, letterSpacing: 0 },
   bentoRow: { flexDirection: 'row', gap: space.md },

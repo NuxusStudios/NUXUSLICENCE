@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { fonts, radius, space, type, useIsDark, useTheme, type TypeVariant } from '../lib/theme';
 import { useI18n } from '../lib/i18n';
 
@@ -95,7 +96,6 @@ export function Screen({
   title,
   subtitle,
   right,
-  gradient,
 }: {
   children: ReactNode;
   refreshing?: boolean;
@@ -103,18 +103,17 @@ export function Screen({
   title?: string;
   subtitle?: string;
   right?: ReactNode;
-  /** Soft blue gradient band behind the header (Sanad Services / Account). */
-  gradient?: boolean;
 }) {
   const c = useTheme();
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: c.bg }}
-      contentContainerStyle={styles.screen}
-      refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.textMuted} /> : undefined}
-      keyboardShouldPersistTaps="handled"
-    >
-      {gradient ? <LinearGradient colors={[c.primarySoft, c.bg]} style={styles.headerGradient} pointerEvents="none" /> : null}
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <AmbientBackground />
+      <ScrollView
+        style={{ flex: 1, backgroundColor: 'transparent' }}
+        contentContainerStyle={styles.screen}
+        refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.textMuted} /> : undefined}
+        keyboardShouldPersistTaps="handled"
+      >
       {title ? (
         <View style={styles.largeHeader}>
           <View style={{ flex: 1, gap: 2 }}>
@@ -127,7 +126,8 @@ export function Screen({
         </View>
       ) : null}
       {children}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -193,21 +193,18 @@ export function Card({
   /** Lift off the page with a soft shadow. Reserved for hero surfaces; most cards stay flat. */
   elevated?: boolean;
 }) {
-  const c = useTheme();
-  // Sanad cards are soft grey "fills" with no visible border. `elevated` opts
-  // into a raised white card (surface + hairline + shadow) for hero surfaces.
-  const base: StyleProp<ViewStyle> = [
-    styles.card,
-    elevated
-      ? { backgroundColor: c.surface, borderColor: c.border, borderWidth: StyleSheet.hairlineWidth, boxShadow: c.shadow }
-      : { backgroundColor: c.surfaceAlt, borderColor: 'transparent' },
-    flush && { padding: 0, gap: 0 },
-    style,
-  ];
-  if (!onPress) return <View style={base}>{children}</View>;
-  return (
-    <PressScale onPress={onPress} accessibilityLabel={accessibilityLabel} style={base}>
+  // Cards are frosted glass panels floating over the ambient canvas; `elevated`
+  // uses a slightly denser material for hero surfaces.
+  const cardStyle: StyleProp<ViewStyle> = [styles.card, flush && { padding: 0, gap: 0 }, style];
+  const inner = (
+    <Glass intensity={elevated ? 60 : 42} style={cardStyle}>
       {children}
+    </Glass>
+  );
+  if (!onPress) return inner;
+  return (
+    <PressScale onPress={onPress} accessibilityLabel={accessibilityLabel}>
+      {inner}
     </PressScale>
   );
 }
@@ -264,15 +261,43 @@ export function Glass({
   if (reduce) {
     return <View style={[{ backgroundColor: c.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, overflow: 'hidden' }, style]}>{children}</View>;
   }
-  const wash = dark ? 'rgba(18,24,32,0.52)' : 'rgba(255,255,255,0.55)';
-  const edge = dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.70)';
   return (
-    <View style={[{ overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: edge }, style]}>
+    <View style={[{ overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, boxShadow: c.shadow }, style]}>
       <BlurView intensity={intensity} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: wash }]} pointerEvents="none" />
-      {rim ? <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: dark ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.9)' }} pointerEvents="none" /> : null}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: c.glass }]} pointerEvents="none" />
+      {rim ? <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: c.glassRim }} pointerEvents="none" /> : null}
       {children}
     </View>
+  );
+}
+
+/**
+ * The ambient canvas behind the glass: the deep base colour plus a few soft
+ * colour glows in the corners, so frosted panels have something to refract.
+ */
+export function AmbientBackground() {
+  const c = useTheme();
+  return (
+    <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Defs>
+        <RadialGradient id="glow1" cx="14%" cy="4%" r="60%">
+          <Stop offset="0" stopColor={c.glow1} />
+          <Stop offset="1" stopColor={c.glow1} stopOpacity="0" />
+        </RadialGradient>
+        <RadialGradient id="glow2" cx="94%" cy="16%" r="55%">
+          <Stop offset="0" stopColor={c.glow2} />
+          <Stop offset="1" stopColor={c.glow2} stopOpacity="0" />
+        </RadialGradient>
+        <RadialGradient id="glow3" cx="48%" cy="98%" r="65%">
+          <Stop offset="0" stopColor={c.glow3} />
+          <Stop offset="1" stopColor={c.glow3} stopOpacity="0" />
+        </RadialGradient>
+      </Defs>
+      <Rect x="0" y="0" width="100%" height="100%" fill={c.bg} />
+      <Rect x="0" y="0" width="100%" height="100%" fill="url(#glow1)" />
+      <Rect x="0" y="0" width="100%" height="100%" fill="url(#glow2)" />
+      <Rect x="0" y="0" width="100%" height="100%" fill="url(#glow3)" />
+    </Svg>
   );
 }
 
@@ -338,7 +363,7 @@ export function Button({
       {/* Blur base for the material (glass) buttons. */}
       {material && <BlurView intensity={isPrimary ? 22 : 36} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} pointerEvents="none" />}
       {/* Accent tint for the prominent (primary) glass; neutral wash for clear glass. */}
-      {isPrimary && !reduce && <View style={[StyleSheet.absoluteFill, { backgroundColor: c.primary, opacity: 0.82 }]} pointerEvents="none" />}
+      {isPrimary && !reduce && <LinearGradient colors={[c.gradFrom, c.gradTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" />}
       {isGlass && !reduce && <View style={[StyleSheet.absoluteFill, { backgroundColor: dark ? 'rgba(18,24,32,0.5)' : 'rgba(255,255,255,0.5)' }]} pointerEvents="none" />}
       {/* Bright top rim + specular sheen. */}
       {material && <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: dark ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.85)' }} pointerEvents="none" />}
@@ -585,7 +610,6 @@ export function Empty({ icon, text }: { icon: IconName; text: string }) {
 
 const styles = StyleSheet.create({
   screen: { padding: space.lg, paddingBottom: space.xxl * 2.5, gap: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' },
-  headerGradient: { position: 'absolute', top: -space.lg, left: -space.lg, right: -space.lg, height: 260 },
   largeHeader: { flexDirection: 'row', alignItems: 'flex-end', gap: space.md, paddingTop: space.sm, paddingBottom: space.xs },
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: space.sm },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.md, marginBottom: -space.xs, paddingHorizontal: 2 },

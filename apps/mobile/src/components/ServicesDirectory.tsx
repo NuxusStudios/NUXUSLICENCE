@@ -93,7 +93,6 @@ export function ServicesDirectory({ largeTitle }: { largeTitle?: boolean }) {
 
   return (
     <Screen
-      gradient={largeTitle}
       refreshing={loading}
       onRefresh={reload}
       title={largeTitle ? tr('Services', 'Services') : undefined}

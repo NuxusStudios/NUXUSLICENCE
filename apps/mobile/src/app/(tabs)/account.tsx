@@ -41,7 +41,7 @@ export default function Account() {
   }
 
   return (
-    <Screen title={t('tabAccount')} gradient>
+    <Screen title={t('tabAccount')}>
       <Card>
         <View style={styles.profile}>
           <View style={[styles.avatar, { backgroundColor: c.primary }]}>

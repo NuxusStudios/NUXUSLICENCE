@@ -7,65 +7,84 @@ import type { CredentialType } from './types';
 // Swap these tokens for the issuing government's design system once the app
 // is commissioned. No screen hard-codes colours.
 
+// Design system: "liquid glass" (Ron Design Lab style). Frosted translucent
+// panels float over a deep, softly-lit canvas with ambient colour glows;
+// accents are vibrant gradients. Surfaces get their material from the Glass
+// component, so these tokens carry the canvas, text, rims and gradient stops.
+
 const light = {
-  // Sanad surface model: a white page, with soft grey "filled" cards that carry
-  // no visible border (the contrast comes from the fill, not an outline).
-  bg: '#FFFFFF',
+  // Soft tinted canvas so frosted white panels read as glass (not invisible).
+  bg: '#E7ECF8',
   surface: '#FFFFFF',
-  surfaceAlt: '#F2F4F8',
-  text: '#0D1522',
-  textMuted: '#5F6B7D',
-  textFaint: '#8C96A6',
-  border: '#E6E9EF',
-  primary: '#16325C',
+  surfaceAlt: '#EEF2FC',
+  text: '#0C1020',
+  textMuted: '#55607A',
+  textFaint: '#8A93AC',
+  border: 'rgba(255,255,255,0.65)',
+  primary: '#3B63F6',
   primaryText: '#FFFFFF',
-  primarySoft: '#E8EFFD',
-  accent: '#2563EB',
-  /** Secondary accent (lilac), for negative deltas and alt highlights. */
-  lilac: '#7C4DD6',
+  primarySoft: 'rgba(59,99,246,0.12)',
+  accent: '#3B63F6',
+  /** Secondary accent (violet), for gradients and alt highlights. */
+  lilac: '#8B5CF6',
   danger: '#C2321F',
-  dangerBg: '#FCEDEA',
+  dangerBg: 'rgba(194,50,31,0.10)',
   warning: '#9C5A00',
-  warningBg: '#FFF3DC',
+  warningBg: 'rgba(156,90,0,0.12)',
   success: '#12795A',
-  successBg: '#E1F3EB',
-  /** Highlight for announcements and "needs attention" (Sanad's gold). */
+  successBg: 'rgba(18,121,90,0.12)',
   gold: '#8A6100',
-  goldBg: '#FFF6D6',
+  goldBg: 'rgba(240,180,0,0.14)',
   watermark: 'rgba(255, 120, 108, 0.75)',
-  /** Elevation is used sparingly now — flat, bordered surfaces carry the UI. */
-  shadow: '0px 1px 2px rgba(13, 21, 34, 0.04), 0px 1px 3px rgba(13, 21, 34, 0.06)',
-  shadowStrong: '0px 16px 36px rgba(13, 21, 34, 0.14)',
-  hairline: 'transparent',
-  tabBar: '#FFFFFF',
+  shadow: '0px 8px 24px rgba(20,30,60,0.10)',
+  shadowStrong: '0px 20px 48px rgba(20,30,60,0.18)',
+  hairline: 'rgba(255,255,255,0.6)',
+  tabBar: 'transparent',
+  /** Frosted-panel wash + bright rim used by the Glass material. */
+  glass: 'rgba(255,255,255,0.55)',
+  glassRim: 'rgba(255,255,255,0.9)',
+  /** Ambient colour glows painted behind the glass. */
+  glow1: 'rgba(91,141,239,0.45)',
+  glow2: 'rgba(168,85,247,0.38)',
+  glow3: 'rgba(45,212,191,0.30)',
+  /** Accent gradient stops. */
+  gradFrom: '#3B7BF6',
+  gradTo: '#8B5CF6',
 };
 
 const dark: typeof light = {
-  bg: '#07090E',
-  surface: '#11161F',
-  surfaceAlt: '#19212C',
-  text: '#EDF1F7',
-  textMuted: '#9AA6B6',
-  textFaint: '#6B7686',
-  border: '#232C38',
-  primary: '#9BBCFF',
-  primaryText: '#07090E',
-  primarySoft: '#17243A',
-  accent: '#9BBCFF',
+  bg: '#070912',
+  surface: '#121626',
+  surfaceAlt: '#171C2E',
+  text: '#EEF1FF',
+  textMuted: '#A6AECB',
+  textFaint: '#6B7496',
+  border: 'rgba(255,255,255,0.12)',
+  primary: '#5B8DEF',
+  primaryText: '#FFFFFF',
+  primarySoft: 'rgba(123,150,255,0.18)',
+  accent: '#9DB4FF',
   lilac: '#C4B0F5',
   danger: '#FF8F80',
-  dangerBg: '#36160F',
+  dangerBg: 'rgba(255,143,128,0.14)',
   warning: '#F5B655',
-  warningBg: '#33240C',
+  warningBg: 'rgba(245,182,85,0.14)',
   success: '#5AD1A2',
-  successBg: '#0E2C22',
+  successBg: 'rgba(90,209,162,0.14)',
   gold: '#F2C94C',
-  goldBg: '#2E2508',
+  goldBg: 'rgba(242,201,76,0.14)',
   watermark: 'rgba(255, 150, 140, 0.8)',
-  shadow: 'none',
-  shadowStrong: '0px 18px 40px rgba(0, 0, 0, 0.55)',
-  hairline: '#1E2631',
-  tabBar: '#0C1118',
+  shadow: '0px 10px 30px rgba(0,0,0,0.45)',
+  shadowStrong: '0px 24px 60px rgba(0,0,0,0.6)',
+  hairline: 'rgba(255,255,255,0.12)',
+  tabBar: 'transparent',
+  glass: 'rgba(22,27,45,0.55)',
+  glassRim: 'rgba(255,255,255,0.18)',
+  glow1: 'rgba(91,141,239,0.38)',
+  glow2: 'rgba(168,85,247,0.34)',
+  glow3: 'rgba(45,212,191,0.22)',
+  gradFrom: '#5B8DEF',
+  gradTo: '#A855F7',
 };
 
 export type Theme = typeof light;
