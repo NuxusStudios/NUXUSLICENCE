@@ -10,9 +10,9 @@ import { radius } from '../lib/theme';
 // this recreates the pulse with react-native-svg + a looping dash animation.)
 
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
-const START = '#18CCFC';
-const MIDDLE = '#6344F5';
-const END = '#AE48FF';
+const START = '#FFFFFF';
+const MIDDLE = '#D4D8E2';
+const END = '#8E93A0';
 
 export function PulseButton({ title, icon, onPress }: { title: string; icon?: IconName; onPress: () => void }) {
   const [size, setSize] = useState({ w: 0, h: 0 });

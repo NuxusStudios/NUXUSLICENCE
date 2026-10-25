@@ -16,7 +16,7 @@ import { passwordChecks, type Appointment, type RequestEvent, type RequestStatus
 import { LICENCE_STATUS_LABEL, LICENCE_STATUS_TONE, licenceConditionLabels, licenceStatusMessage, type LicenceStatus } from '../lib/shared/licence-status';
 import { POA_CASE_LABEL, POA_CASE_TONE, poaCaseMessage, type POACaseStatus } from '../lib/shared/poa';
 import type { Credential, CredentialType } from '../lib/types';
-import { fonts, radius, space, useTheme } from '../lib/theme';
+import { fonts, radius, space, useIsDark, useTheme } from '../lib/theme';
 
 // ---------------------------------------------------------------------------
 // Dashboard widget: a titled card with an optional "View all" link
@@ -169,15 +169,15 @@ export function QuickTile({ icon, label, onPress, badge, highlight }: { icon: Ic
   const c = useTheme();
   const body = (
     <>
-      <View style={[styles.quickIcon, { backgroundColor: highlight ? 'rgba(255,255,255,0.22)' : c.surface }]}>
-        <Ionicons name={icon} size={22} color={highlight ? '#FFFFFF' : c.accent} />
+      <View style={[styles.quickIcon, { backgroundColor: highlight ? hexA(c.primaryText, 0.16) : c.surface }]}>
+        <Ionicons name={icon} size={22} color={highlight ? c.primaryText : c.accent} />
         {badge ? (
           <View style={[styles.tileBadge, { backgroundColor: c.danger, borderColor: highlight ? 'transparent' : c.surfaceAlt }]}>
             <Text style={styles.tileBadgeText}>{badge}</Text>
           </View>
         ) : null}
       </View>
-      <Text style={{ fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, color: highlight ? '#FFFFFF' : c.text }} numberOfLines={2}>
+      <Text style={{ fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, color: highlight ? c.primaryText : c.text }} numberOfLines={2}>
         {label}
       </Text>
     </>
@@ -216,7 +216,8 @@ const DOC_ICON: Record<CredentialType, IconName> = {
 export function DocumentTile({ credential, onPress }: { credential: Credential; onPress: () => void }) {
   const c = useTheme();
   const { t, tr, lang } = useI18n();
-  const ink = DOC_INK[credential.type];
+  // Dark mode is monochrome: document tiles tint in silver, not per-type colour.
+  const ink = useIsDark() ? '#CDD2DE' : DOC_INK[credential.type];
   const bad = credential.status !== 'valid';
   const statusText = bad
     ? { expired: tr('Expired', 'Expiré'), suspended: tr('Suspended', 'Suspendu'), revoked: tr('Revoked', 'Révoqué') }[credential.status as 'expired' | 'suspended' | 'revoked']

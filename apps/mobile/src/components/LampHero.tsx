@@ -8,7 +8,7 @@ import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 // this recreates the look with react-native-svg + the Animated API.)
 
 const HERO_BG = '#06080C';
-const GLOW = '#5B8DEF';
+const GLOW = '#EDEFF4';
 
 export function LampHero({ children, header, style }: { children: ReactNode; header?: ReactNode; style?: StyleProp<ViewStyle> }) {
   const { width } = useWindowDimensions();

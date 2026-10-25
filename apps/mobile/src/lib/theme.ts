@@ -52,19 +52,23 @@ const light = {
   gradTo: '#8B5CF6',
 };
 
+// Dark mode is monochrome — black canvas, dark frosted glass, white/silver
+// accents and a bright silver gradient for the hero/CTA. No colour hue except
+// the functional status colours (danger / warning / success), which stay so
+// state is still legible.
 const dark: typeof light = {
-  bg: '#070912',
-  surface: '#121626',
-  surfaceAlt: '#171C2E',
-  text: '#EEF1FF',
-  textMuted: '#A6AECB',
-  textFaint: '#6B7496',
+  bg: '#08090C',
+  surface: '#121318',
+  surfaceAlt: '#16181F',
+  text: '#F3F4F8',
+  textMuted: '#A8ACB8',
+  textFaint: '#70747F',
   border: 'rgba(255,255,255,0.12)',
-  primary: '#5B8DEF',
-  primaryText: '#FFFFFF',
-  primarySoft: 'rgba(123,150,255,0.18)',
-  accent: '#9DB4FF',
-  lilac: '#C4B0F5',
+  primary: '#ECEEF3',
+  primaryText: '#0A0A0C',
+  primarySoft: 'rgba(255,255,255,0.12)',
+  accent: '#F2F3F7',
+  lilac: '#C7CBD6',
   danger: '#FF8F80',
   dangerBg: 'rgba(255,143,128,0.14)',
   warning: '#F5B655',
@@ -78,13 +82,13 @@ const dark: typeof light = {
   shadowStrong: '0px 24px 60px rgba(0,0,0,0.6)',
   hairline: 'rgba(255,255,255,0.12)',
   tabBar: 'transparent',
-  glass: 'rgba(22,27,45,0.55)',
+  glass: 'rgba(18,19,24,0.55)',
   glassRim: 'rgba(255,255,255,0.18)',
-  glow1: 'rgba(91,141,239,0.38)',
-  glow2: 'rgba(168,85,247,0.34)',
-  glow3: 'rgba(45,212,191,0.22)',
-  gradFrom: '#5B8DEF',
-  gradTo: '#A855F7',
+  glow1: 'rgba(255,255,255,0.10)',
+  glow2: 'rgba(255,255,255,0.07)',
+  glow3: 'rgba(255,255,255,0.05)',
+  gradFrom: '#EDEFF4',
+  gradTo: '#C7CBD6',
 };
 
 export type Theme = typeof light;
