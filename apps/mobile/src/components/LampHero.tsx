@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Animated, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Defs, Rect, RadialGradient, Stop } from 'react-native-svg';
 
@@ -13,8 +13,8 @@ const GLOW = '#5B8DEF';
 export function LampHero({ children, header, style }: { children: ReactNode; header?: ReactNode; style?: StyleProp<ViewStyle> }) {
   const { width } = useWindowDimensions();
   const w = Math.min(width, 680);
-  const beam = useRef(new Animated.Value(0)).current;
-  const rise = useRef(new Animated.Value(0)).current;
+  const [beam] = useState(() => new Animated.Value(0));
+  const [rise] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     Animated.parallel([

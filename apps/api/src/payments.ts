@@ -1,4 +1,5 @@
 import { newId, referenceNumber } from './crypto.js';
+import { config } from './config.js';
 import type { Store } from './store.js';
 import type { Payment } from './types.js';
 
@@ -26,6 +27,40 @@ export interface PaymentProvider {
 export const demoPaymentProvider: PaymentProvider = {
   async charge(req) {
     return { approved: req.paymentToken !== 'tok_decline', processorRef: newId('ch') };
+  },
+};
+
+/**
+ * Stripe adapter (production). Confirms a PaymentIntent for the amount using the
+ * payment-method token minted by the client card/wallet sheet. Wired only when
+ * PAYMENTS_PROVIDER=stripe and STRIPE_SECRET_KEY is set. A production deployment
+ * would add webhook reconciliation and idempotency keys; this is the synchronous
+ * charge boundary the route handlers call.
+ */
+export const stripePaymentProvider: PaymentProvider = {
+  async charge(req) {
+    const key = config.payments.stripeSecretKey;
+    if (!key) throw new Error('STRIPE_SECRET_KEY must be set for the Stripe payment provider.');
+    const form = new URLSearchParams({
+      amount: String(Math.round(req.amount * 100)),
+      currency: 'cad',
+      confirm: 'true',
+      payment_method: req.paymentToken,
+      'automatic_payment_methods[enabled]': 'true',
+      'automatic_payment_methods[allow_redirects]': 'never',
+      description: req.label ?? req.purpose,
+      'metadata[accountId]': req.accountId,
+      'metadata[purpose]': req.purpose,
+      'metadata[referenceId]': req.referenceId,
+    });
+    const res = await fetch('https://api.stripe.com/v1/payment_intents', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: form,
+    });
+    const intent = (await res.json()) as { id?: string; status?: string; error?: { message?: string } };
+    if (!res.ok || !intent.id) throw new Error(intent.error?.message ?? `stripe returned ${res.status}`);
+    return { approved: intent.status === 'succeeded', processorRef: intent.id };
   },
 };
 

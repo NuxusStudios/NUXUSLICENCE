@@ -118,4 +118,21 @@ export const config = {
     /** How long unmatched/queued events are retained before they are purged (data minimization). */
     unmatchedRetentionDays: Number(env('CAMERA_UNMATCHED_RETENTION_DAYS', '90')),
   },
+
+  /** Identity proofing (IAL2 document scan + liveness) used at registration. */
+  identity: {
+    /** 'demo' approves any idv_ session (except idv_decline/idv_fail); 'vendor' calls the IDV vendor's API. */
+    provider: env('IDENTITY_PROVIDER', isProduction ? 'vendor' : 'demo') as 'demo' | 'vendor',
+    endpoint: process.env.IDENTITY_ENDPOINT,
+    apiKey: process.env.IDENTITY_API_KEY,
+  },
+
+  /** Payment processing. 'demo' approves every token except tok_decline. */
+  payments: {
+    provider: env('PAYMENTS_PROVIDER', isProduction ? 'stripe' : 'demo') as 'demo' | 'stripe',
+    stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+  },
+
+  /** Durable persistence. When DATA_DIR is set the store snapshots to disk and restores on boot. */
+  dataDir: process.env.DATA_DIR,
 };

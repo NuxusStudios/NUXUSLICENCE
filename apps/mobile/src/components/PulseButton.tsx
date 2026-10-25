@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Button, type IconName } from './ui';
@@ -16,7 +16,7 @@ const END = '#AE48FF';
 
 export function PulseButton({ title, icon, onPress }: { title: string; icon?: IconName; onPress: () => void }) {
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const progress = useRef(new Animated.Value(0)).current;
+  const [progress] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     const loop = Animated.loop(

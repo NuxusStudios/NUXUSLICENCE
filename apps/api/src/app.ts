@@ -27,6 +27,7 @@ import { canRequestScreening, disputeOptionsFor, parkingAmountDue, parkingStage,
 import { buildLicenceStatus, isAdverseChange, licenceStatusMessage, shouldRefresh, type LicenceStatus, type MtoLicenceStatus } from './shared/licence-status.js';
 import { notify } from './notifications.js';
 import { charge } from './payments.js';
+import { verifyIdentitySession } from './identity.js';
 import { ORGANIZATIONS, SERVICES, serviceById } from './catalog.js';
 import {
   FAQ,
@@ -546,6 +547,17 @@ export async function buildApp(opts: AppOptions = {}) {
       if (!body.phone || !samePhone(body.phone, otp!.target)) throw new HttpError(422, 'otp_invalid', 'The code was sent to a different number.');
     }
 
+    // Identity proofing: the vendor attests the live human holds the scanned
+    // document (IAL2). The registry match below then binds that document to a
+    // licensing record. Same opaque error for every failure mode.
+    const idv = await verifyIdentitySession(body.idvSessionId);
+    if (!idv.verified) {
+      throw new HttpError(422, 'identity_verification_failed', 'We could not verify your identity document. Please try the scan again.');
+    }
+    if (idv.claims?.dateOfBirth && idv.claims.dateOfBirth !== body.dateOfBirth) {
+      throw new HttpError(422, 'identity_not_matched', 'We could not match these details to a licensing record.');
+    }
+
     const person = store.findPersonByLicence(body.licenceNumber);
     // Same error for "no such licence" and "DOB mismatch" to avoid record enumeration.
     if (!person || person.dateOfBirth !== body.dateOfBirth) {
@@ -562,7 +574,7 @@ export async function buildApp(opts: AppOptions = {}) {
       passwordHash: await hashPassword(body.password),
       language: body.language,
       createdAt: new Date().toISOString(),
-      identityAssurance: 'IAL2',
+      identityAssurance: idv.assurance,
       pushTokens: [],
       ...(body.pin ? { pinHash: await hashPassword(body.pin) } : {}),
     };

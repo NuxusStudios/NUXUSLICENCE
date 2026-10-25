@@ -130,7 +130,7 @@ export interface Account {
   passwordHash: string;
   language: 'en' | 'fr';
   createdAt: string;
-  identityAssurance: 'IAL2';
+  identityAssurance: 'IAL1' | 'IAL2';
   pushTokens: string[];
   /** Digital ID PIN (scrypt), confirms signing and data sharing. */
   pinHash?: string;
