@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Badge, Button, Card, IconTile, Notice, PressScale, Txt, type IconName } from './ui';
 import { DEMO_MODE } from '../lib/config';
@@ -14,6 +15,7 @@ import { useI18n } from '../lib/i18n';
 import { passwordChecks, type Appointment, type RequestEvent, type RequestStatus } from '../lib/shared/platform';
 import { LICENCE_STATUS_LABEL, LICENCE_STATUS_TONE, licenceConditionLabels, licenceStatusMessage, type LicenceStatus } from '../lib/shared/licence-status';
 import { POA_CASE_LABEL, POA_CASE_TONE, poaCaseMessage, type POACaseStatus } from '../lib/shared/poa';
+import type { Credential, CredentialType } from '../lib/types';
 import { fonts, radius, space, useTheme } from '../lib/theme';
 
 // ---------------------------------------------------------------------------
@@ -137,6 +139,97 @@ export function Tile({ icon, label, onPress, badge, width = '25%' }: { icon: Ico
       <Txt v="caption" style={{ textAlign: 'center', fontFamily: fonts.semibold, fontSize: 12, lineHeight: 16 }} numberOfLines={2}>
         {label}
       </Txt>
+    </PressScale>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sanad quick-access tile + document tile
+// ---------------------------------------------------------------------------
+
+/** Add an alpha channel to a #RRGGBB hex colour. */
+function hexA(hex: string, alpha: number) {
+  return `${hex}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`;
+}
+
+/**
+ * A large Sanad "Quick access" tile: a soft grey rounded card with a blue line
+ * icon and a bold label. The `highlight` tile uses a blue→violet gradient
+ * (Sanad's one featured shortcut).
+ */
+export function QuickTile({ icon, label, onPress, badge, highlight }: { icon: IconName; label: string; onPress: () => void; badge?: number; highlight?: boolean }) {
+  const c = useTheme();
+  const body = (
+    <>
+      <View style={[styles.quickIcon, { backgroundColor: highlight ? 'rgba(255,255,255,0.22)' : c.surface }]}>
+        <Ionicons name={icon} size={22} color={highlight ? '#FFFFFF' : c.accent} />
+        {badge ? (
+          <View style={[styles.tileBadge, { backgroundColor: c.danger, borderColor: highlight ? 'transparent' : c.surfaceAlt }]}>
+            <Text style={styles.tileBadgeText}>{badge}</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={{ fontFamily: fonts.semibold, fontSize: 13, lineHeight: 17, color: highlight ? '#FFFFFF' : c.text }} numberOfLines={2}>
+        {label}
+      </Text>
+    </>
+  );
+  return (
+    <PressScale onPress={onPress} containerStyle={{ flex: 1 }} accessibilityLabel={badge ? `${label}, ${badge}` : label}>
+      {highlight ? (
+        <LinearGradient colors={['#3B7BF6', '#7C4DD6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.quickTile}>
+          {body}
+        </LinearGradient>
+      ) : (
+        <View style={[styles.quickTile, { backgroundColor: c.surfaceAlt }]}>{body}</View>
+      )}
+    </PressScale>
+  );
+}
+
+const DOC_INK: Record<CredentialType, string> = {
+  driver_licence: '#2563EB',
+  photo_card: '#5A6472',
+  health_card: '#7C4DD6',
+  vehicle_permit: '#12795A',
+};
+const DOC_ICON: Record<CredentialType, IconName> = {
+  driver_licence: 'card',
+  photo_card: 'person',
+  health_card: 'medkit',
+  vehicle_permit: 'car',
+};
+
+/**
+ * A Sanad-style document tile for the 2-column wallet grid: a soft tinted card
+ * with the document name, its number, and its expiry (or a red status when the
+ * document isn't valid).
+ */
+export function DocumentTile({ credential, onPress }: { credential: Credential; onPress: () => void }) {
+  const c = useTheme();
+  const { t, tr, lang } = useI18n();
+  const ink = DOC_INK[credential.type];
+  const bad = credential.status !== 'valid';
+  const statusText = bad
+    ? { expired: tr('Expired', 'Expiré'), suspended: tr('Suspended', 'Suspendu'), revoked: tr('Revoked', 'Révoqué') }[credential.status as 'expired' | 'suspended' | 'revoked']
+    : `${tr('Exp.', 'Exp.')} ${date(credential.expiresOn, lang)}`;
+  return (
+    <PressScale onPress={onPress} containerStyle={{ flex: 1 }} style={[styles.docTile, { backgroundColor: hexA(ink, 0.1) }]} accessibilityLabel={t(credential.type)}>
+      <View style={[styles.docIcon, { backgroundColor: hexA(ink, 0.16) }]}>
+        <Ionicons name={DOC_ICON[credential.type]} size={19} color={ink} />
+      </View>
+      <View style={{ gap: 2 }}>
+        <Txt v="strong" numberOfLines={2}>
+          {t(credential.type)}
+        </Txt>
+        <Txt v="caption" faint numberOfLines={1}>
+          {credential.documentNumber}
+        </Txt>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        <Ionicons name={bad ? 'alert-circle' : 'time-outline'} size={13} color={bad ? c.danger : c.textMuted} />
+        <Text style={{ fontFamily: fonts.semibold, fontSize: 11.5, color: bad ? c.danger : c.textMuted }}>{statusText}</Text>
+      </View>
     </PressScale>
   );
 }
@@ -585,6 +678,10 @@ const styles = StyleSheet.create({
   widgetHead: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.xs, marginTop: space.sm },
   widgetBox: { borderRadius: 22, paddingHorizontal: space.lg, paddingVertical: space.xs, overflow: 'hidden' },
   tile: { alignItems: 'center', gap: 6, paddingHorizontal: 2, paddingVertical: space.xs },
+  quickTile: { borderRadius: 20, padding: space.md, paddingVertical: space.lg, gap: space.md, minHeight: 108, justifyContent: 'space-between', overflow: 'hidden' },
+  quickIcon: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  docTile: { borderRadius: 20, padding: space.lg, gap: space.sm, minHeight: 138, justifyContent: 'space-between', overflow: 'hidden' },
+  docIcon: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   tileBadge: { position: 'absolute', top: -4, right: -6, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2 },
   tileBadgeText: { color: '#fff', fontSize: 10, fontFamily: fonts.bold },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1.5 },

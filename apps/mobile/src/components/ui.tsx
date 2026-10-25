@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { fonts, radius, space, type, useIsDark, useTheme, type TypeVariant } from '../lib/theme';
 import { useI18n } from '../lib/i18n';
@@ -94,6 +95,7 @@ export function Screen({
   title,
   subtitle,
   right,
+  gradient,
 }: {
   children: ReactNode;
   refreshing?: boolean;
@@ -101,6 +103,8 @@ export function Screen({
   title?: string;
   subtitle?: string;
   right?: ReactNode;
+  /** Soft blue gradient band behind the header (Sanad Services / Account). */
+  gradient?: boolean;
 }) {
   const c = useTheme();
   return (
@@ -110,6 +114,7 @@ export function Screen({
       refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.textMuted} /> : undefined}
       keyboardShouldPersistTaps="handled"
     >
+      {gradient ? <LinearGradient colors={[c.primarySoft, c.bg]} style={styles.headerGradient} pointerEvents="none" /> : null}
       {title ? (
         <View style={styles.largeHeader}>
           <View style={{ flex: 1, gap: 2 }}>
@@ -580,6 +585,7 @@ export function Empty({ icon, text }: { icon: IconName; text: string }) {
 
 const styles = StyleSheet.create({
   screen: { padding: space.lg, paddingBottom: space.xxl * 2.5, gap: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' },
+  headerGradient: { position: 'absolute', top: -space.lg, left: -space.lg, right: -space.lg, height: 260 },
   largeHeader: { flexDirection: 'row', alignItems: 'flex-end', gap: space.md, paddingTop: space.sm, paddingBottom: space.xs },
   card: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: space.sm },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.md, marginBottom: -space.xs, paddingHorizontal: 2 },

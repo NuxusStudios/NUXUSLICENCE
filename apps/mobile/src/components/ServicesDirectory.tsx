@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Chip, ChipRow, SearchField, SuggestCard, Widget } from './kit';
-import { Badge, Divider, ErrorState, ListItem, Loading, Screen, Segmented, Txt } from './ui';
+import { Badge, Divider, ErrorState, ListItem, Loading, PressScale, Screen, Txt } from './ui';
 import { api } from '../lib/api';
 import { money } from '../lib/format';
 import { useI18n } from '../lib/i18n';
-import { CATEGORY_ICON, serviceHref } from '../lib/icons';
+import { CATEGORY_EMOJI, CATEGORY_ICON, serviceHref } from '../lib/icons';
 import type { OrgId, ServiceCategory, ServiceDefinition } from '../lib/shared/platform';
+import { fonts, space, useTheme } from '../lib/theme';
 import { useAsync } from '../lib/useAsync';
 
 const CATEGORIES: ServiceCategory[] = ['driver', 'vehicle', 'identity', 'health', 'records', 'courts'];
@@ -15,10 +16,11 @@ const CATEGORIES: ServiceCategory[] = ['driver', 'vehicle', 'identity', 'health'
 /** Sanad-style services directory: search, most used, new, by category or by organization. */
 export function ServicesDirectory({ largeTitle }: { largeTitle?: boolean }) {
   const { tr, pick, lang } = useI18n();
+  const c = useTheme();
   const { data, error, loading, reload } = useAsync(api.directory);
   const [query, setQuery] = useState('');
-  const [mode, setMode] = useState<'category' | 'org'>('category');
   const [org, setOrg] = useState<OrgId>('serviceontario');
+  const [selected, setSelected] = useState<ServiceCategory | null>(null);
   if (!data && loading) return <Loading />;
   if (!data && error) return <ErrorState error={error} onRetry={reload} />;
   const { services, organizations } = data!;
@@ -31,6 +33,46 @@ export function ServicesDirectory({ largeTitle }: { largeTitle?: boolean }) {
     records: tr('Records and certificates', 'Dossiers et certificats'),
     courts: tr('Tickets and courts', 'Contraventions et tribunaux'),
   };
+  const catShort: Record<ServiceCategory, string> = {
+    driver: tr('Licences', 'Permis'),
+    vehicle: tr('Vehicles', 'Véhicules'),
+    identity: tr('Identity', 'Identité'),
+    health: tr('Health', 'Santé'),
+    records: tr('Records', 'Dossiers'),
+    courts: tr('Courts', 'Tribunaux'),
+  };
+
+  // Sanad category grid: colourful emoji tiles, 3 per row.
+  const categoryGrid = (
+    <View style={{ gap: space.sm }}>
+      <View style={{ paddingHorizontal: 2 }}>
+        <Txt v="section" accessibilityRole="header">
+          {tr('Categories', 'Catégories')}
+        </Txt>
+      </View>
+      {[CATEGORIES.slice(0, 3), CATEGORIES.slice(3, 6)].map((grp, r) => (
+        <View key={r} style={{ flexDirection: 'row', gap: space.md }}>
+          {grp.map((cat) => {
+            const on = selected === cat;
+            return (
+              <PressScale
+                key={cat}
+                onPress={() => setSelected(on ? null : cat)}
+                containerStyle={{ flex: 1 }}
+                accessibilityState={{ selected: on }}
+                style={{ backgroundColor: on ? c.primarySoft : c.surfaceAlt, borderRadius: 20, paddingVertical: space.lg, paddingHorizontal: space.sm, alignItems: 'center', gap: 8, borderWidth: on ? 1.5 : 0, borderColor: on ? c.accent : 'transparent' }}
+              >
+                <Text style={{ fontSize: 26 }}>{CATEGORY_EMOJI[cat]}</Text>
+                <Text numberOfLines={2} style={{ textAlign: 'center', fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15, color: on ? c.accent : c.text }}>
+                  {catShort[cat]}
+                </Text>
+              </PressScale>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
 
   const row = (s: ServiceDefinition, i: number) => (
     <View key={s.id}>
@@ -51,6 +93,7 @@ export function ServicesDirectory({ largeTitle }: { largeTitle?: boolean }) {
 
   return (
     <Screen
+      gradient={largeTitle}
       refreshing={loading}
       onRefresh={reload}
       title={largeTitle ? tr('Services', 'Services') : undefined}
@@ -68,7 +111,7 @@ export function ServicesDirectory({ largeTitle }: { largeTitle?: boolean }) {
               {orgResults.map((o, i) => (
                 <View key={o.id}>
                   {i > 0 && <Divider inset={52} />}
-                  <ListItem icon={o.icon as never} title={pick(o.name)} subtitle={pick(o.description)} onPress={() => { setQuery(''); setMode('org'); setOrg(o.id); }} />
+                  <ListItem icon={o.icon as never} title={pick(o.name)} subtitle={pick(o.description)} onPress={() => { setQuery(''); setOrg(o.id); }} />
                 </View>
               ))}
             </Widget>
@@ -83,38 +126,32 @@ export function ServicesDirectory({ largeTitle }: { largeTitle?: boolean }) {
         </>
       ) : (
         <>
-          <Widget title={tr('Most used', 'Les plus utilisés')}>{services.filter((s) => s.popular).map(row)}</Widget>
-          <Widget title={tr('New services', 'Nouveaux services')}>{services.filter((s) => s.isNew).map(row)}</Widget>
+          {categoryGrid}
 
-          <Segmented
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: 'category', label: tr('By category', 'Par catégorie') },
-              { value: 'org', label: tr('By organization', 'Par organisme') },
-            ]}
-          />
-          {mode === 'category' ? (
-            CATEGORIES.map((cat) => {
-              const list = services.filter((s) => s.category === cat);
-              return list.length ? (
-                <Widget key={cat} title={catName[cat]} subtitle={tr(`${list.length} services`, `${list.length} services`)}>
-                  {list.map(row)}
-                </Widget>
-              ) : null;
-            })
+          {selected ? (
+            <Widget title={catName[selected]} action={tr('Show all', 'Tout afficher')} onAction={() => setSelected(null)}>
+              {services.filter((s) => s.category === selected).map(row)}
+            </Widget>
           ) : (
             <>
-              <ChipRow>
-                {organizations.map((o) => (
-                  <Chip key={o.id} label={pick(o.name)} icon={o.icon as never} on={org === o.id} onPress={() => setOrg(o.id)} />
-                ))}
-              </ChipRow>
-              <Widget title={pick(organizations.find((o) => o.id === org)!.name)} subtitle={pick(organizations.find((o) => o.id === org)!.description)}>
-                {services.filter((s) => s.orgId === org).map(row)}
-              </Widget>
+              <Widget title={tr('Most used', 'Les plus utilisés')}>{services.filter((s) => s.popular).map(row)}</Widget>
+              <Widget title={tr('New services', 'Nouveaux services')}>{services.filter((s) => s.isNew).map(row)}</Widget>
             </>
           )}
+
+          <View style={{ paddingHorizontal: 2, marginTop: space.sm }}>
+            <Txt v="section" accessibilityRole="header">
+              {tr('By organization', 'Par organisme')}
+            </Txt>
+          </View>
+          <ChipRow>
+            {organizations.map((o) => (
+              <Chip key={o.id} label={pick(o.name)} icon={o.icon as never} on={org === o.id} onPress={() => setOrg(o.id)} />
+            ))}
+          </ChipRow>
+          <Widget title={pick(organizations.find((o) => o.id === org)!.name)} subtitle={pick(organizations.find((o) => o.id === org)!.description)}>
+            {services.filter((s) => s.orgId === org).map(row)}
+          </Widget>
 
           <SuggestCard
             icon="bulb"

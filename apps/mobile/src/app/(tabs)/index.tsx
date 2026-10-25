@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-n
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DocumentCard } from '../../components/DocumentCard';
-import { BentoRow, BentoTile, Chip, LicenceStatusPill, Tile } from '../../components/kit';
+import { BentoRow, BentoTile, Chip, LicenceStatusPill, QuickTile } from '../../components/kit';
 import { Badge, Button, Divider, ErrorState, ListItem, Loading, PressScale, Screen, Txt } from '../../components/ui';
 import { api } from '../../lib/api';
 import { money } from '../../lib/format';
@@ -62,7 +62,7 @@ export default function Home() {
             <Ionicons name="shield-checkmark" size={22} color={c.primaryText} />
             <View style={{ flex: 1 }}>
               <Text style={{ color: c.primaryText, fontFamily: fonts.bold, fontSize: 16 }}>{tr('Driver’s licence', 'Permis de conduire')}</Text>
-              <Text style={{ color: c.primaryText, opacity: 0.7, fontFamily: fonts.mono, fontSize: 12.5, marginTop: 2 }}>{person.licenceNumber}</Text>
+              <Text style={{ color: c.primaryText, opacity: 0.7, fontFamily: fonts.semibold, fontSize: 13, marginTop: 2 }}>{person.licenceNumber}</Text>
             </View>
             <LicenceStatusPill status={licence.licenceStatus} />
             <Ionicons name="chevron-forward" size={18} color={c.primaryText} style={{ opacity: 0.8 }} />
@@ -152,19 +152,35 @@ export default function Home() {
         <Chip label={tr('Choose favourites', 'Choisir les favoris')} icon="star-outline" onPress={() => router.push('/favourites?kind=cards')} />
       </BentoTile>
 
-      {/* Quick access. */}
-      <BentoTile title={tr('Quick access', 'Accès rapide')}>
-        <View style={styles.grid}>
-          <Tile icon="file-tray-full" label={tr('My requests', 'Mes demandes')} badge={openRequests} onPress={() => router.push('/requests')} />
-          <Tile icon="calendar" label={tr('Appointments', 'Rendez-vous')} onPress={() => router.push('/appointments')} />
-          <Tile icon="create" label={tr('Sign', 'Signer')} onPress={() => router.push('/sign')} />
-          <Tile icon="qr-code" label={tr('Verify', 'Vérifier')} onPress={() => router.push('/verify')} />
-          <Tile icon="hand-left" label={tr('Data requests', 'Demandes de données')} badge={pendingConsents} onPress={() => router.push('/consents')} />
-          <Tile icon="card" label={tr('Payments', 'Paiements')} onPress={() => router.push('/payments')} />
-          <Tile icon="location" label={tr('Locations', 'Bureaux')} onPress={() => router.push('/locations')} />
-          <Tile icon="help-buoy" label={tr('Help', 'Aide')} onPress={() => router.push('/help')} />
+      {/* Quick access: a 3-column grid of soft tiles, the first one highlighted. */}
+      <View style={{ gap: space.sm }}>
+        <View style={styles.sectionHead}>
+          <Txt v="section" accessibilityRole="header">
+            {tr('Quick access', 'Accès rapide')}
+          </Txt>
         </View>
-      </BentoTile>
+        {(() => {
+          const items = [
+            { icon: 'file-tray-full', label: tr('My requests', 'Mes demandes'), badge: openRequests, to: '/requests', highlight: true },
+            { icon: 'calendar', label: tr('Appointments', 'Rendez-vous'), to: '/appointments' },
+            { icon: 'create', label: tr('Sign', 'Signer'), to: '/sign' },
+            { icon: 'qr-code', label: tr('Verify', 'Vérifier'), to: '/verify' },
+            { icon: 'hand-left', label: tr('Data requests', 'Demandes de données'), badge: pendingConsents, to: '/consents' },
+            { icon: 'card', label: tr('Payments', 'Paiements'), to: '/payments' },
+            { icon: 'location', label: tr('Locations', 'Bureaux'), to: '/locations' },
+            { icon: 'help-buoy', label: tr('Help', 'Aide'), to: '/help' },
+          ] as const;
+          const rows = Array.from({ length: Math.ceil(items.length / 3) }, (_, r) => items.slice(r * 3, r * 3 + 3));
+          return rows.map((row, r) => (
+            <View key={r} style={styles.quickRow}>
+              {row.map((it) => (
+                <QuickTile key={it.to} icon={it.icon} label={it.label} badge={'badge' in it ? it.badge : undefined} highlight={'highlight' in it ? it.highlight : undefined} onPress={() => router.push(it.to as never)} />
+              ))}
+              {row.length < 3 && Array.from({ length: 3 - row.length }, (_, k) => <View key={`s${k}`} style={{ flex: 1 }} />)}
+            </View>
+          ));
+        })()}
+      </View>
 
       {/* Favourite services. */}
       {favServices.length > 0 && (
@@ -185,8 +201,9 @@ const styles = StyleSheet.create({
   bell: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
   bellDot: { position: 'absolute', top: -2, right: -2, minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, borderWidth: 2 },
   bellDotText: { color: '#fff', fontSize: 11, fontFamily: fonts.bold },
-  amount: { fontFamily: fonts.monoBold, fontSize: 30, letterSpacing: -0.8, fontVariant: ['tabular-nums'] },
-  monoMd: { fontFamily: fonts.monoBold, fontSize: 22, letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  amount: { fontFamily: fonts.extrabold, fontSize: 32, letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  monoMd: { fontFamily: fonts.bold, fontSize: 24, letterSpacing: -0.6, fontVariant: ['tabular-nums'] },
   eye: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: space.md, paddingVertical: space.xs },
+  sectionHead: { paddingHorizontal: 2, marginTop: space.sm },
+  quickRow: { flexDirection: 'row', gap: space.md },
 });

@@ -41,7 +41,7 @@ export default function Account() {
   }
 
   return (
-    <Screen title={t('tabAccount')}>
+    <Screen title={t('tabAccount')} gradient>
       <Card>
         <View style={styles.profile}>
           <View style={[styles.avatar, { backgroundColor: c.primary }]}>
@@ -58,7 +58,7 @@ export default function Account() {
         </View>
         <Divider />
         <Row label={tr('Digital ID status', 'Statut de l’identité numérique')} value={<Badge label={`${tr('Verified', 'Vérifiée')} · ${account.identityAssurance}`} tone="success" />} />
-        <Row label={t('licenceNumber')} value={person.licenceNumber} mono />
+        <Row label={t('licenceNumber')} value={person.licenceNumber} />
         <Row label={t('dateOfBirth').split(' (')[0]!} value={date(person.dateOfBirth, lang)} />
       </Card>
 
