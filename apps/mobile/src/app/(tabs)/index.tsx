@@ -71,6 +71,36 @@ export default function Home() {
         </View>
       )}
 
+      {/* Quick access: a 3-column grid of soft tiles, the first one highlighted. */}
+      <View style={{ gap: space.sm }}>
+        <View style={styles.sectionHead}>
+          <Txt v="section" accessibilityRole="header">
+            {tr('Quick access', 'Accès rapide')}
+          </Txt>
+        </View>
+        {(() => {
+          const items = [
+            { icon: 'file-tray-full', label: tr('My requests', 'Mes demandes'), badge: openRequests, to: '/requests', highlight: true },
+            { icon: 'calendar', label: tr('Appointments', 'Rendez-vous'), to: '/appointments' },
+            { icon: 'create', label: tr('Sign', 'Signer'), to: '/sign' },
+            { icon: 'qr-code', label: tr('Verify', 'Vérifier'), to: '/verify' },
+            { icon: 'hand-left', label: tr('Data requests', 'Demandes de données'), badge: pendingConsents, to: '/consents' },
+            { icon: 'card', label: tr('Payments', 'Paiements'), to: '/payments' },
+            { icon: 'location', label: tr('Locations', 'Bureaux'), to: '/locations' },
+            { icon: 'help-buoy', label: tr('Help', 'Aide'), to: '/help' },
+          ] as const;
+          const rows = Array.from({ length: Math.ceil(items.length / 3) }, (_, r) => items.slice(r * 3, r * 3 + 3));
+          return rows.map((row, r) => (
+            <View key={r} style={styles.quickRow}>
+              {row.map((it) => (
+                <QuickTile key={it.to} icon={it.icon} label={it.label} badge={'badge' in it ? it.badge : undefined} highlight={'highlight' in it ? it.highlight : undefined} onPress={() => router.push(it.to as never)} />
+              ))}
+              {row.length < 3 && Array.from({ length: 3 - row.length }, (_, k) => <View key={`s${k}`} style={{ flex: 1 }} />)}
+            </View>
+          ));
+        })()}
+      </View>
+
       {/* Paired row: amount due + next visit. */}
       <BentoRow>
         <BentoTile title={t('totalDue')} onPress={() => router.push('/fines')} style={{ flex: 1 }}>
@@ -154,36 +184,6 @@ export default function Home() {
         <Chip label={tr('Choose favourites', 'Choisir les favoris')} icon="star-outline" onPress={() => router.push('/favourites?kind=cards')} />
       </BentoTile>
       )}
-
-      {/* Quick access: a 3-column grid of soft tiles, the first one highlighted. */}
-      <View style={{ gap: space.sm }}>
-        <View style={styles.sectionHead}>
-          <Txt v="section" accessibilityRole="header">
-            {tr('Quick access', 'Accès rapide')}
-          </Txt>
-        </View>
-        {(() => {
-          const items = [
-            { icon: 'file-tray-full', label: tr('My requests', 'Mes demandes'), badge: openRequests, to: '/requests', highlight: true },
-            { icon: 'calendar', label: tr('Appointments', 'Rendez-vous'), to: '/appointments' },
-            { icon: 'create', label: tr('Sign', 'Signer'), to: '/sign' },
-            { icon: 'qr-code', label: tr('Verify', 'Vérifier'), to: '/verify' },
-            { icon: 'hand-left', label: tr('Data requests', 'Demandes de données'), badge: pendingConsents, to: '/consents' },
-            { icon: 'card', label: tr('Payments', 'Paiements'), to: '/payments' },
-            { icon: 'location', label: tr('Locations', 'Bureaux'), to: '/locations' },
-            { icon: 'help-buoy', label: tr('Help', 'Aide'), to: '/help' },
-          ] as const;
-          const rows = Array.from({ length: Math.ceil(items.length / 3) }, (_, r) => items.slice(r * 3, r * 3 + 3));
-          return rows.map((row, r) => (
-            <View key={r} style={styles.quickRow}>
-              {row.map((it) => (
-                <QuickTile key={it.to} icon={it.icon} label={it.label} badge={'badge' in it ? it.badge : undefined} highlight={'highlight' in it ? it.highlight : undefined} onPress={() => router.push(it.to as never)} />
-              ))}
-              {row.length < 3 && Array.from({ length: 3 - row.length }, (_, k) => <View key={`s${k}`} style={{ flex: 1 }} />)}
-            </View>
-          ));
-        })()}
-      </View>
 
       {/* Favourite services. */}
       {favServices.length > 0 && (
