@@ -32,6 +32,7 @@ export default function Home() {
   const favs = preferences.favouriteCards.map((id) => wallet.find((w) => w.id === id)).filter((w) => !!w);
   const licence = wallet.find((w) => w.type === 'driver_licence');
   const cards = favs.length ? favs : wallet;
+  const otherCards = cards.filter((cr) => cr.id !== licence?.id);
   const cardWidth = Math.min(width - 72, 320);
   const openRequests = requests.filter((r) => r.status === 'action_required' || r.status === 'awaiting_payment').length;
   const pendingConsents = consents.filter((x) => x.status === 'pending' && !x.expired).length;
@@ -55,19 +56,19 @@ export default function Home() {
 
   return (
     <Screen refreshing={loading} onRefresh={reload} title={`${greeting}, ${person.givenNames.split(' ')[0]}`} subtitle={today.charAt(0).toUpperCase() + today.slice(1)} right={bell}>
-      {/* Anchor tile: identity + live licence status, solid accent. */}
+      {/* The driver's licence card sits at the top of the home page (Sanad). */}
       {licence && (
-        <BentoTile accent onPress={() => router.push(`/credential/${licence.id}`)}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-            <Ionicons name="shield-checkmark" size={22} color={c.primaryText} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: c.primaryText, fontFamily: fonts.bold, fontSize: 16 }}>{tr('Driver’s licence', 'Permis de conduire')}</Text>
-              <Text style={{ color: c.primaryText, opacity: 0.7, fontFamily: fonts.semibold, fontSize: 13, marginTop: 2 }}>{person.licenceNumber}</Text>
-            </View>
+        <View style={{ gap: space.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 }}>
+            <Txt v="section" accessibilityRole="header">
+              {tr('Your licence', 'Votre permis')}
+            </Txt>
             <LicenceStatusPill status={licence.licenceStatus} />
-            <Ionicons name="chevron-forward" size={18} color={c.primaryText} style={{ opacity: 0.8 }} />
           </View>
-        </BentoTile>
+          <PressScale onPress={() => router.push(`/credential/${licence.id}`)} accessibilityLabel={t('showLicence')} scaleTo={0.985}>
+            <DocumentCard credential={licence} animated />
+          </PressScale>
+        </View>
       )}
 
       {/* Paired row: amount due + next visit. */}
@@ -140,10 +141,11 @@ export default function Home() {
         )}
       </BentoTile>
 
-      {/* Cards carousel. */}
-      <BentoTile title={tr('Your cards', 'Vos cartes')} action={tr('View all', 'Tout voir')} onAction={() => router.push('/wallet')}>
+      {/* Cards carousel (the licence is already the hero at the top). */}
+      {otherCards.length > 0 && (
+      <BentoTile title={tr('Your other cards', 'Vos autres cartes')} action={tr('View all', 'Tout voir')} onAction={() => router.push('/wallet')}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} snapToInterval={cardWidth + space.md} decelerationRate="fast" contentContainerStyle={{ gap: space.md, paddingVertical: space.xs, paddingRight: space.lg }} style={{ marginHorizontal: -space.lg, paddingLeft: space.lg }}>
-          {cards.map((cred, i) => (
+          {otherCards.map((cred, i) => (
             <PressScale key={cred.id} onPress={() => router.push(`/credential/${cred.id}`)} accessibilityLabel={cred.type === 'driver_licence' ? t('showLicence') : t(cred.type)} scaleTo={0.985} containerStyle={{ width: cardWidth }}>
               <DocumentCard credential={cred} animated={i === 0} compact={i > 0} />
             </PressScale>
@@ -151,6 +153,7 @@ export default function Home() {
         </ScrollView>
         <Chip label={tr('Choose favourites', 'Choisir les favoris')} icon="star-outline" onPress={() => router.push('/favourites?kind=cards')} />
       </BentoTile>
+      )}
 
       {/* Quick access: a 3-column grid of soft tiles, the first one highlighted. */}
       <View style={{ gap: space.sm }}>

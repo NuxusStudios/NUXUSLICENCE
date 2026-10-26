@@ -49,6 +49,9 @@ const light = {
   glow1: 'rgba(91,141,239,0.55)',
   glow2: 'rgba(168,85,247,0.48)',
   glow3: 'rgba(45,212,191,0.40)',
+  /** Base canvas gradient (top -> bottom) under the glows. */
+  canvasTop: '#EDF1FC',
+  canvasBottom: '#E3E9F6',
   /** Accent gradient stops. */
   gradFrom: '#3B7BF6',
   gradTo: '#8B5CF6',
@@ -90,6 +93,8 @@ const dark: typeof light = {
   glow1: 'rgba(255,255,255,0.18)',
   glow2: 'rgba(255,255,255,0.13)',
   glow3: 'rgba(255,255,255,0.10)',
+  canvasTop: '#14161F',
+  canvasBottom: '#05060A',
   gradFrom: '#EDEFF4',
   gradTo: '#C7CBD6',
 };

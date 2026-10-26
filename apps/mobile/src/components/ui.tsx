@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { fonts, radius, space, type, useIsDark, useTheme, type TypeVariant } from '../lib/theme';
 import { useI18n } from '../lib/i18n';
 
@@ -286,19 +286,24 @@ export function Glass({
  */
 export function AmbientBackground() {
   const c = useTheme();
-  // Several large overlapping glows blanket the viewport so a frosted panel
-  // anywhere on screen has a gradient to refract (that's what makes it read as
-  // glass, not a flat card).
+  // A full-height base gradient plus large overlapping glows spread across the
+  // whole viewport — so the backdrop is rich everywhere (not just top-left) and
+  // a frosted panel anywhere has a gradient to refract.
   const glows = [
-    { id: 'g1', cx: '12%', cy: '2%', r: '60%', col: c.glow1 },
-    { id: 'g2', cx: '96%', cy: '12%', r: '55%', col: c.glow2 },
-    { id: 'g3', cx: '2%', cy: '48%', r: '55%', col: c.glow3 },
-    { id: 'g4', cx: '100%', cy: '62%', r: '60%', col: c.glow1 },
-    { id: 'g5', cx: '50%', cy: '100%', r: '65%', col: c.glow2 },
+    { id: 'g1', cx: '8%', cy: '6%', r: '55%', col: c.glow1 },
+    { id: 'g2', cx: '92%', cy: '2%', r: '50%', col: c.glow2 },
+    { id: 'g3', cx: '50%', cy: '38%', r: '55%', col: c.glow3 },
+    { id: 'g4', cx: '4%', cy: '66%', r: '50%', col: c.glow2 },
+    { id: 'g5', cx: '98%', cy: '80%', r: '55%', col: c.glow1 },
+    { id: 'g6', cx: '45%', cy: '100%', r: '60%', col: c.glow3 },
   ];
   return (
     <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs>
+        <SvgLinearGradient id="canvas" x1="0" y1="0" x2="0.35" y2="1">
+          <Stop offset="0" stopColor={c.canvasTop} />
+          <Stop offset="1" stopColor={c.canvasBottom} />
+        </SvgLinearGradient>
         {glows.map((g) => (
           <RadialGradient key={g.id} id={g.id} cx={g.cx} cy={g.cy} r={g.r}>
             <Stop offset="0" stopColor={g.col} />
@@ -306,7 +311,7 @@ export function AmbientBackground() {
           </RadialGradient>
         ))}
       </Defs>
-      <Rect x="0" y="0" width="100%" height="100%" fill={c.bg} />
+      <Rect x="0" y="0" width="100%" height="100%" fill="url(#canvas)" />
       {glows.map((g) => (
         <Rect key={g.id} x="0" y="0" width="100%" height="100%" fill={`url(#${g.id})`} />
       ))}
