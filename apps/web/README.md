@@ -32,5 +32,6 @@ Point any static host at this folder (`apps/web`):
   published yet. The primary live CTA links to the interactive demo.
 - The footer carries the prototype disclaimer (not affiliated with the
   Government of Ontario; screens use demo data). Keep it until the product ships.
-- Content is English; add a French version before a public Ontario launch (the app
-  itself is already bilingual).
+- Bilingual: `index.html` (English) and `fr.html` (French), with a language switch
+  in the nav and footer of each. Both share `assets/`. Keep the two in sync when
+  editing copy.
