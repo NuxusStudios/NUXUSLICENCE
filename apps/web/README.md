@@ -1,6 +1,6 @@
-# CivicPass marketing website
+# Polis Pass marketing website
 
-A standalone, framework-free consumer site for CivicPass — where residents learn
+A standalone, framework-free consumer site for Polis Pass — where residents learn
 about the app and get it. No build step: it's static HTML + one stylesheet block +
 image assets, so it deploys anywhere.
 
