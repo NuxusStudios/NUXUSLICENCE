@@ -73,11 +73,30 @@
   .store .s2{font-size:17px;font-weight:600;font-family:'Space Grotesk',sans-serif}
   .soon{position:absolute;top:-9px;right:10px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
     background:var(--grad);color:#fff;padding:2px 8px;border-radius:999px}
-  .phones{position:relative;display:flex;justify-content:center;align-items:center;min-height:560px}
-  .phone{border-radius:40px;border:1px solid var(--glass-rim);overflow:hidden;box-shadow:0 40px 90px rgba(0,0,0,0.55);width:280px}
-  .phone img{width:100%;display:block}
-  .phone.back{position:absolute;transform:rotate(-7deg) translateX(-96px) scale(0.9);opacity:0.85;filter:blur(0.3px)}
-  .phone.front{position:relative;transform:rotate(3deg) translateX(40px)}
+  /* Realistic iPhone mockup (ported from the cinematic-hero component to vanilla CSS) */
+  .phones{position:relative;display:flex;justify-content:center;align-items:center;min-height:680px}
+  .device-stage{position:relative;perspective:1600px;display:flex;align-items:center;justify-content:center}
+  .iphone{position:relative;width:300px;height:620px;border-radius:3rem;background:#111;transform-style:preserve-3d;transition:transform .25s ease-out;will-change:transform;
+    box-shadow:inset 0 0 0 2px #52525B, inset 0 0 0 7px #000, 0 50px 90px -20px rgba(0,0,0,.9), 0 20px 40px -10px rgba(0,0,0,.6)}
+  .screen{position:absolute;inset:7px;border-radius:2.6rem;overflow:hidden;background:#050914;box-shadow:inset 0 0 15px rgba(0,0,0,1)}
+  .screen img{width:100%;height:100%;object-fit:cover;display:block}
+  .glare{position:absolute;inset:0;pointer-events:none;background:linear-gradient(110deg,rgba(255,255,255,.10) 0%,rgba(255,255,255,0) 45%)}
+  .island{position:absolute;top:16px;left:50%;transform:translateX(-50%);width:104px;height:30px;background:#000;border-radius:999px;z-index:20;box-shadow:inset 0 -1px 2px rgba(255,255,255,.1)}
+  .hw{position:absolute;background:linear-gradient(90deg,#404040,#171717);box-shadow:-2px 0 5px rgba(0,0,0,.8),inset -1px 0 1px rgba(255,255,255,.15)}
+  .hw-mute{top:120px;left:-3px;width:3px;height:26px;border-radius:3px 0 0 3px}
+  .hw-v1{top:166px;left:-3px;width:3px;height:48px;border-radius:3px 0 0 3px}
+  .hw-v2{top:226px;left:-3px;width:3px;height:48px;border-radius:3px 0 0 3px}
+  .hw-power{top:182px;right:-3px;width:3px;height:74px;border-radius:0 3px 3px 0;background:linear-gradient(270deg,#404040,#171717)}
+  .fbadge{position:absolute;display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:18px;z-index:30;
+    background:linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.02));backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    box-shadow:0 0 0 1px rgba(255,255,255,.1),0 25px 50px -12px rgba(0,0,0,.8),inset 0 1px 1px rgba(255,255,255,.2)}
+  .fbadge-tl{top:36px;left:-34px}
+  .fbadge-br{bottom:84px;right:-34px}
+  .fb-ic{width:40px;height:40px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;border:1px solid;flex:none}
+  .fb-ic-green{background:rgba(45,212,191,.15);color:#6FE3C0;border-color:rgba(90,209,162,.3)}
+  .fb-ic-blue{background:rgba(91,141,239,.15);color:#9FBCFF;border-color:rgba(91,141,239,.35)}
+  .fb-t{font-size:14px;font-weight:700;color:#fff;line-height:1.2}
+  .fb-s{font-size:12px;color:var(--muted);line-height:1.2}
 
   /* Trust strip */
   .trust{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:center;align-items:center;
@@ -140,7 +159,9 @@
     .hero{grid-template-columns:1fr;text-align:center;padding-top:56px}
     .hero h1{font-size:46px}.hero p.lede{margin-left:auto;margin-right:auto}
     .cta-row,.stores{justify-content:center}
-    .phones{min-height:460px;margin-top:20px}
+    .phones{min-height:560px;margin-top:12px}
+    .device-stage{transform:scale(.8)}
+    .fbadge-tl{left:-14px}.fbadge-br{right:-14px}
     .grid,.steps{grid-template-columns:1fr}
     .privacy{grid-template-columns:1fr;padding:36px}
     .sec-head h2,.download h2{font-size:34px}
@@ -187,8 +208,24 @@
       </div>
     </div>
     <div class="phones">
-      <div class="phone back"><img src="assets/app-documents.png" alt="CivicPass documents screen showing licence, health card and vehicle permits" /></div>
-      <div class="phone front"><img src="assets/app-home.png" alt="CivicPass home screen with the driver's licence card and quick actions" /></div>
+      <div class="device-stage">
+        <div class="iphone" id="heroPhone">
+          <span class="hw hw-mute"></span><span class="hw hw-v1"></span><span class="hw hw-v2"></span><span class="hw hw-power"></span>
+          <div class="screen">
+            <img src="assets/app-home.png" alt="CivicPass home screen with the driver's licence card and quick actions" />
+            <div class="glare" aria-hidden="true"></div>
+          </div>
+          <div class="island" aria-hidden="true"></div>
+        </div>
+        <div class="fbadge fbadge-tl">
+          <div class="fb-ic fb-ic-green" aria-hidden="true">✓</div>
+          <div><p class="fb-t">Licence valid</p><p class="fb-s">Checked live</p></div>
+        </div>
+        <div class="fbadge fbadge-br">
+          <div class="fb-ic fb-ic-blue" aria-hidden="true">🔒</div>
+          <div><p class="fb-t">Shared securely</p><p class="fb-s">You choose what to show</p></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -295,5 +332,12 @@
   </div>
 </footer>
 <script>document.getElementById('yr').textContent=new Date().getFullYear();</script>
+<script>
+(function(){var p=document.getElementById('heroPhone');if(!p)return;
+if(window.matchMedia('(prefers-reduced-motion: reduce)').matches||window.matchMedia('(max-width:900px)').matches)return;
+var raf;window.addEventListener('mousemove',function(e){cancelAnimationFrame(raf);raf=requestAnimationFrame(function(){
+var x=(e.clientX/window.innerWidth-0.5)*2,y=(e.clientY/window.innerHeight-0.5)*2;
+p.style.transform='rotateY('+(x*9).toFixed(2)+'deg) rotateX('+(-y*9).toFixed(2)+'deg)';});});})();
+</script>
 </body>
 </html>
