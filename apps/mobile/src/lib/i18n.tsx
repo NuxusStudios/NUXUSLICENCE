@@ -25,7 +25,7 @@ const en = {
   done: 'Done',
   retry: 'Try again',
   loading: 'Loading…',
-  demoHint: 'Demo account: demo@civicpass.example / Demo1234!',
+  demoHint: 'Demo account: demo@polispass.com / Demo1234!',
 
   // registration
   regStep1: 'Your licence details',
@@ -198,7 +198,7 @@ const en = {
 
   // verify
   verifyTitle: 'Verify an ID',
-  verifyBody: 'Scan a CivicPass QR code to confirm it was issued by the province and is currently valid.',
+  verifyBody: 'Scan a Polis Pass QR code to confirm it was issued by the province and is currently valid.',
   scanQr: 'Scan QR code',
   pasteToken: 'Or paste a code',
   verifierName: 'Your organization (shown to the holder)',
@@ -263,7 +263,7 @@ const fr: Partial<Record<TKey, string>> = {
   done: 'Terminé',
   retry: 'Réessayer',
   loading: 'Chargement…',
-  demoHint: 'Compte démo : demo@civicpass.example / Demo1234!',
+  demoHint: 'Compte démo : demo@polispass.com / Demo1234!',
   regStep1: 'Votre permis',
   regStep1Body: 'Nous comparons ces données au registre des permis. Munissez-vous de votre permis de conduire ou carte-photo.',
   licenceNumber: 'Numéro de permis',
@@ -413,7 +413,7 @@ const fr: Partial<Record<TKey, string>> = {
   inboxTitle: 'Boîte de réception',
   inboxEmpty: 'Aucun message.',
   verifyTitle: 'Vérifier une pièce d’identité',
-  verifyBody: 'Numérisez un code QR CivicPass pour confirmer qu’il a été délivré par la province et qu’il est valide.',
+  verifyBody: 'Numérisez un code QR Polis Pass pour confirmer qu’il a été délivré par la province et qu’il est valide.',
   scanQr: 'Numériser le code QR',
   pasteToken: 'Ou collez un code',
   verifierName: 'Votre organisation (visible par le titulaire)',
@@ -472,7 +472,7 @@ function deviceLang(): Lang {
   }
 }
 
-const LANG_KEY = 'civicpass.lang';
+const LANG_KEY = 'polispass.lang';
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(deviceLang);

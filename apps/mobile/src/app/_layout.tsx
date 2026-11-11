@@ -41,7 +41,7 @@ function RootNavigator() {
       }}
     >
       <Stack.Protected guard={status === 'signedIn'}>
-        {/* The title is what the back button announces to screen readers ("CivicPass, back"). */}
+        {/* The title is what the back button announces to screen readers ("Polis Pass, back"). */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false, title: APP_NAME }} />
         <Stack.Screen name="credential/[id]" options={{ title: '' }} />
         <Stack.Screen name="vehicle/[id]" options={{ title: '' }} />

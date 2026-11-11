@@ -174,7 +174,7 @@ export default function Account() {
       <View style={{ marginTop: space.md, gap: space.sm }}>
         {logout ? (
           <Card style={{ gap: space.sm }}>
-            <Txt v="strong">{tr('Sign out of CivicPass?', 'Se déconnecter de CivicPass?')}</Txt>
+            <Txt v="strong">{tr('Sign out of Polis Pass?', 'Se déconnecter de Polis Pass?')}</Txt>
             <Button title={t('signOut')} variant="danger" icon="log-out-outline" onPress={() => void signOut()} />
             <Button title={t('cancel')} variant="ghost" size="md" onPress={() => setLogout(false)} />
           </Card>

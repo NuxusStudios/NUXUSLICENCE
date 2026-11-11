@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "CivicPass",
-    "slug": "civicpass",
-    "scheme": "civicpass",
+    "name": "Polis Pass",
+    "slug": "polis-pass",
+    "scheme": "polispass",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "ca.example.civicpass",
+      "bundleIdentifier": "com.polispass.app",
       "supportsTablet": true,
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use Face ID to unlock your digital wallet.",
@@ -17,7 +17,7 @@
       }
     },
     "android": {
-      "package": "ca.example.civicpass",
+      "package": "com.polispass.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

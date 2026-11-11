@@ -9,7 +9,7 @@
 // The authoritative source is Ontario's MTO driver record — the same system
 // of record that backs ServiceOntario's public Driver's Licence Check
 // (dlc.rus.mto.gov.on.ca). That public page is a human-only, CAPTCHA-gated,
-// pay-per-order webpage; CivicPass does NOT drive it. Production connects to
+// pay-per-order webpage; Polis Pass does NOT drive it. Production connects to
 // MTO's account-based batch/API feed under a data-sharing agreement. Until
 // that feed is commissioned, a demo provider returns deterministic statuses so
 // the whole mechanism runs on fictional data (see apps/api/src/licence-status.ts).

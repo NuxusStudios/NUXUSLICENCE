@@ -63,7 +63,7 @@ export default function Help() {
       </Widget>
 
       <Widget title={tr('About', 'À propos')}>
-        <ListItem icon="information-circle" title={tr('About CivicPass', 'À propos de CivicPass')} onPress={() => router.push('/help/about')} />
+        <ListItem icon="information-circle" title={tr('About Polis Pass', 'À propos de Polis Pass')} onPress={() => router.push('/help/about')} />
         <Divider inset={52} />
         <ListItem icon="lock-closed" title={tr('Privacy policy', 'Politique de confidentialité')} onPress={() => router.push('/help/privacy')} />
       </Widget>

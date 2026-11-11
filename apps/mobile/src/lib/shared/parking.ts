@@ -14,7 +14,7 @@
 //   • day 45   last day to request a screening review
 //   • day 46   Notice of Impending Default
 //
-// CivicPass does NOT drive the public gtechna pay/dispute webpage (it is a
+// Polis Pass does NOT drive the public gtechna pay/dispute webpage (it is a
 // session/ViewState-bound JSF app meant for a person with one ticket). It
 // integrates with the municipality's parking system: issued tickets are pushed
 // to the registered owner by plate ("just show up"), and a ticket can also be
