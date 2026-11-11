@@ -163,6 +163,24 @@
   .ci-b1{top:26px;left:-34px}
   .ci-b2{bottom:54px;right:-34px}
 
+  /* Phone carousel — "Aperçu de l'application" */
+  .pc{display:flex;align-items:center;justify-content:center;gap:20px}
+  .pc-stage{position:relative;perspective:1600px;touch-action:pan-y}
+  .pc-track{display:flex;width:100%;height:100%;transition:transform .6s cubic-bezier(.65,.05,.2,1);will-change:transform}
+  .pc-track img{flex:0 0 100%;width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+  .pc-arrow{width:52px;height:52px;flex:none;border-radius:999px;border:1px solid var(--glass-brd);background:var(--glass);color:var(--ink);font-size:26px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);transition:border-color .2s,transform .15s}
+  .pc-arrow:hover{border-color:var(--glass-rim);transform:scale(1.06)}
+  .pc-cap{text-align:center;max-width:460px;margin:26px auto 0;min-height:76px}
+  .pc-cap h3{font-size:22px;font-weight:600;margin-bottom:6px}
+  .pc-cap p{color:var(--muted);font-size:16px}
+  .pc-dots{display:flex;gap:10px;justify-content:center;margin-top:16px}
+  .pc-dot{width:9px;height:9px;border-radius:999px;border:none;padding:0;cursor:pointer;background:rgba(255,255,255,.22);transition:width .3s,background .3s}
+  .pc-dot.on{width:26px;background:var(--grad)}
+  .pc-ctaRow{display:flex;justify-content:center;margin-top:30px}
+  .btn-shad{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:15px;color:var(--ink);background:rgba(255,255,255,0.08);border:1px solid var(--glass-rim);border-radius:12px;padding:12px 20px;cursor:pointer;transition:background .2s,border-color .2s,transform .1s;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 6px 18px rgba(0,0,0,.25)}
+  .btn-shad:hover{background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,.28)}
+  .btn-shad:active{transform:translateY(1px)}
+
   .privacy{background:var(--glass);border:1px solid var(--glass-brd);border-radius:28px;padding:56px;
     display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;backdrop-filter:blur(12px)}
   .privacy ul{list-style:none;display:flex;flex-direction:column;gap:16px;margin-top:20px}
@@ -202,6 +220,8 @@
     .ci-left,.ci-brand{display:none}
     .ci-b1{left:-10px}.ci-b2{right:-10px}
     .ci-phone{transform:scale(.82)}
+    .pc-arrow{display:none}
+    .pc-stage{transform:scale(.92)}
     .privacy{grid-template-columns:1fr;padding:36px}
     .sec-head h2,.download h2{font-size:34px}
     .nav-links{display:none}
@@ -343,6 +363,39 @@
     </div>
   </section>
 
+  <!-- APERÇU (carrousel téléphone) -->
+  <section class="block wrap" id="inside">
+    <div class="sec-head">
+      <p class="eyebrow">Aperçu de l'application</p>
+      <h2>Toute l'application</h2>
+      <p>Du tableau de bord à n'importe quel service gouvernemental en quelques gestes. Faites défiler les écrans réels.</p>
+    </div>
+    <div class="pc">
+      <button class="pc-arrow pc-prev" type="button" aria-label="Écran précédent">‹</button>
+      <div class="pc-stage">
+        <div class="iphone" id="pcPhone">
+          <span class="hw hw-mute"></span><span class="hw hw-v1"></span><span class="hw hw-v2"></span><span class="hw hw-power"></span>
+          <div class="screen">
+            <div class="pc-track" id="pcTrack">
+              <img src="assets/screen-home.png" alt="Écran d'accueil de Polis Pass — permis de conduire avec statut valide en direct et actions rapides" />
+              <img src="assets/screen-documents.png" alt="Écran des documents de Polis Pass — permis, carte santé et certificats d'immatriculation" />
+              <img src="assets/screen-services.png" alt="Écran des services de Polis Pass — services gouvernementaux par catégorie" />
+              <img src="assets/screen-account.png" alt="Écran du compte de Polis Pass — identité numérique vérifiée et coordonnées" />
+            </div>
+            <div class="glare" aria-hidden="true"></div>
+          </div>
+          <div class="island" aria-hidden="true"></div>
+        </div>
+      </div>
+      <button class="pc-arrow pc-next" type="button" aria-label="Écran suivant">›</button>
+    </div>
+    <div class="pc-cap" id="pcCap" aria-live="polite"></div>
+    <div class="pc-dots" id="pcDots" role="tablist" aria-label="Écrans de l'application"></div>
+    <div class="pc-ctaRow">
+      <a class="btn-shad" href="https://claude.ai/artifact/ASjUyfq4v92UFzSvxtr4aR" target="_blank" rel="noopener">Ouvrir la démo</a>
+    </div>
+  </section>
+
   <!-- SERVICES GOUVERNEMENTAUX -->
   <section class="block wrap" id="services">
     <div class="sec-head">
@@ -452,7 +505,7 @@
       <div class="foot-col"><h4>Mentions légales</h4><a href="#">Politique de confidentialité</a><a href="#">Conditions d'utilisation</a><a href="#">Accessibilité</a></div>
       <div class="foot-col"><h4>Langue</h4><a href="index.html">English</a><a href="fr.html">Français</a></div>
     </div>
-    <p class="disclaimer">Polis Pass est un prototype et n'est affilié à aucun gouvernement ni approuvé par aucun; les juridictions et services nommés sont fournis à titre d'exemple. Les écrans présentés utilisent des données de démonstration et sont marqués comme spécimens; ce ne sont pas des documents gouvernementaux valides. « App Store » et « Google Play » sont des marques de commerce de leurs propriétaires respectifs; les fiches sont à venir. © <span id="yr"></span> Polis Pass.</p>
+    <p class="disclaimer">Polis Pass est un prototype et n'est affilié à aucun gouvernement ni approuvé par aucun; les juridictions et services nommés sont fournis à titre d'exemple. Les écrans présentés utilisent des données de démonstration et ne sont pas des documents gouvernementaux valides. « App Store » et « Google Play » sont des marques de commerce de leurs propriétaires respectifs; les fiches sont à venir. © <span id="yr"></span> Polis Pass.</p>
   </div>
 </footer>
 <script>document.getElementById('yr').textContent=new Date().getFullYear();</script>
@@ -493,6 +546,35 @@ p.style.transform='rotateY('+(x*9).toFixed(2)+'deg) rotateX('+(-y*9).toFixed(2)+
     .to('#ci-cta',{autoAlpha:1,scale:1,filter:'blur(0px)',ease:'power3.out',duration:1.2},'pb');
   var card=document.getElementById('ci-card');
   if(card){window.addEventListener('mousemove',function(e){var r=card.getBoundingClientRect();card.style.setProperty('--mx',(e.clientX-r.left)+'px');card.style.setProperty('--my',(e.clientY-r.top)+'px');});}
+})();
+</script>
+<script>
+(function(){
+  var track=document.getElementById('pcTrack'); if(!track) return;
+  var N=track.children.length, i=0;
+  var caps=[
+    {t:'Accueil',d:'Votre permis bien en vue, avec statut valide en direct et actions rapides.'},
+    {t:'Documents',d:'Permis, carte santé et certificats d\'immatriculation — chaque document dans un seul portefeuille.'},
+    {t:'Services',d:'Parcourez et lancez les services provinciaux et municipaux par catégorie.'},
+    {t:'Compte',d:'Votre identité numérique vérifiée, vos coordonnées et votre sécurité au même endroit.'}
+  ];
+  var capEl=document.getElementById('pcCap'), dotsEl=document.getElementById('pcDots'), dots=[];
+  for(var k=0;k<N;k++){(function(k){var b=document.createElement('button');b.className='pc-dot'+(k===0?' on':'');b.type='button';b.setAttribute('role','tab');b.setAttribute('aria-label','Écran '+(k+1));b.addEventListener('click',function(){go(k,true);});dotsEl.appendChild(b);dots.push(b);})(k);}
+  function render(){track.style.transform='translateX('+(-i*100)+'%)';for(var k=0;k<N;k++)dots[k].classList.toggle('on',k===i);capEl.innerHTML='<h3>'+caps[i].t+'</h3><p>'+caps[i].d+'</p>';}
+  function go(n,user){i=(n+N)%N;render();if(user)restart();}
+  var prev=document.querySelector('.pc-prev'),next=document.querySelector('.pc-next');
+  if(prev)prev.addEventListener('click',function(){go(i-1,true);});
+  if(next)next.addEventListener('click',function(){go(i+1,true);});
+  var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches, timer=null;
+  function restart(){if(reduce)return;clearInterval(timer);timer=setInterval(function(){go(i+1,false);},4200);}
+  var stage=document.getElementById('pcPhone'), x0=null;
+  if(stage){
+    stage.addEventListener('pointerdown',function(e){x0=e.clientX;});
+    window.addEventListener('pointerup',function(e){if(x0==null)return;var dx=e.clientX-x0;if(Math.abs(dx)>40)go(i+(dx<0?1:-1),true);x0=null;});
+  }
+  var sec=document.getElementById('inside');
+  if(sec){sec.addEventListener('mouseenter',function(){clearInterval(timer);});sec.addEventListener('mouseleave',restart);}
+  render();restart();
 })();
 </script>
 </body>
