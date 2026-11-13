@@ -3,11 +3,10 @@
 // sandboxed previews that block external files.
 //
 //   EXPO_PUBLIC_DEMO_MODE=true npx expo export --platform web --output-dir dist-demo
-//   node scripts/build-demo-page.mjs            # → dist-demo/civicpass-demo.html
+//   node scripts/build-demo-page.mjs            # → dist-demo/polis-pass-demo.html
 //
-// The page body is written without <html>/<head>/<body> so hosts that wrap
-// content in their own document skeleton can use it as-is; browsers render it
-// fine standalone too.
+// The output is a complete standalone HTML document (doctype + head + body),
+// so it hosts anywhere as-is.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -37,7 +36,12 @@ js = js.replace(/"(\/assets\/[^"]+)"/g, (whole, url) => {
 // Keep the bundle from closing or confusing the inline <script> element.
 js = js.replaceAll('</script', '<\\/script').replaceAll('<script', '\\x3Cscript').replaceAll('<!--', '\\x3C!--');
 
-const page = `<title>CivicPass</title>
+const page = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Polis Pass</title>
 <meta name="description" content="Prototype digital government wallet: licences, vehicle permits, camera tickets and services in one app. Demo data only.">
 <style>
   /* Full-height app shell for react-native-web; colours follow the app's own theme tokens. */
@@ -48,7 +52,9 @@ const page = `<title>CivicPass</title>
   body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--fg); }
   #root { display: flex; height: 100%; flex: 1; }
 </style>
-<noscript>CivicPass needs JavaScript to run.</noscript>
+</head>
+<body>
+<noscript>Polis Pass needs JavaScript to run.</noscript>
 <div id="root"></div>
 <script>
   // The app's router reads the URL path. Hosted copies live at arbitrary paths,
@@ -56,8 +62,10 @@ const page = `<title>CivicPass</title>
   try { if (location.pathname !== '/') history.replaceState(null, '', '/'); } catch (e) {}
 </script>
 <script>${js}</script>
+</body>
+</html>
 `;
 
-const out = path.join(dist, 'civicpass-demo.html');
+const out = path.join(dist, 'polis-pass-demo.html');
 fs.writeFileSync(out, page);
 console.log(`Wrote ${out} (${(page.length / 1024 / 1024).toFixed(2)} MB, ${inlined} assets inlined, ${(bytes / 1024).toFixed(0)} KB)`);

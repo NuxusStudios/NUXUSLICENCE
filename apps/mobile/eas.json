@@ -11,13 +11,18 @@
     },
     "preview": {
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_API_URL": "https://staging-api.civicpass.example" }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://staging-api.polispass.com",
+        "EXPO_PUBLIC_PROTOTYPE": "true",
+        "EXPO_PUBLIC_DEMO_MODE": "true"
+      }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.civicpass.example",
-        "EXPO_PUBLIC_PROTOTYPE": "true"
+        "EXPO_PUBLIC_API_URL": "https://api.polispass.com",
+        "EXPO_PUBLIC_PROTOTYPE": "true",
+        "EXPO_PUBLIC_DEMO_MODE": "true"
       }
     }
   },

@@ -162,7 +162,7 @@ function seed() {
   ];
   for (const c of creds) credentials.set(c.id, c);
 
-  accounts.set('acc_alex', { id: 'acc_alex', personId: 'per_alex', email: 'demo@civicpass.example', password: 'Demo1234!', phone: '+1 416 555 0100', language: 'en', createdAt: iso(-200), pin: DEMO_PIN });
+  accounts.set('acc_alex', { id: 'acc_alex', personId: 'per_alex', email: 'demo@polispass.com', password: 'Demo1234!', phone: '+1 416 555 0100', language: 'en', createdAt: iso(-200), pin: DEMO_PIN });
   const now = new Date();
   for (const r of sampleRequests('acc_alex', now, newId, ref)) requests.set(r.id, r);
   for (const c of sampleConsents('acc_alex', now, newId)) consents.set(c.id, c);

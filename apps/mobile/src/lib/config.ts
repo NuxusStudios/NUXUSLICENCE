@@ -14,7 +14,7 @@ export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? fallback).replace(/\/
  */
 export const IS_PROTOTYPE = process.env.EXPO_PUBLIC_PROTOTYPE !== 'false';
 
-export const APP_NAME = 'CivicPass';
+export const APP_NAME = 'Polis Pass';
 
 /** Seconds before an on-screen QR code is refreshed (server TTL is 90s). */
 export const QR_REFRESH_SECONDS = 60;

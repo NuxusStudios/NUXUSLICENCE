@@ -12,7 +12,7 @@ export default function SignIn() {
   const c = useTheme();
   const { signIn } = useAuth();
   const { t, tr } = useI18n();
-  const [email, setEmail] = useState(DEMO_MODE ? 'demo@civicpass.example' : '');
+  const [email, setEmail] = useState(DEMO_MODE ? 'demo@polispass.com' : '');
   const [password, setPassword] = useState(DEMO_MODE ? 'Demo1234!' : '');
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);

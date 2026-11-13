@@ -46,7 +46,7 @@ export default function Verify() {
     setBusy(true);
     setResult(undefined);
     try {
-      setResult(await api.verify(value.trim(), verifier.trim() || 'CivicPass verifier'));
+      setResult(await api.verify(value.trim(), verifier.trim() || 'Polis Pass verifier'));
     } catch (e) {
       setResult({ valid: false, reason: (e as Error).message });
     } finally {

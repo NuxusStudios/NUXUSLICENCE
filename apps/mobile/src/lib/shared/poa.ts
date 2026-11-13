@@ -11,7 +11,7 @@
 //
 // That service is a session-bound JSF app with a 20-minute timeout, built for
 // a person with a ticket in hand; it can't list a person's cases and can't be
-// safely automated. CivicPass instead refreshes the court status of the POA
+// safely automated. Polis Pass instead refreshes the court status of the POA
 // tickets already on the account (camera/officer, matched to the owner/driver),
 // and lets a user add a POA ticket by its location code + offence number — the
 // same identifiers the public search uses. Production reads status from the

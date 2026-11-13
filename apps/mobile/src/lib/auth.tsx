@@ -4,8 +4,8 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { api, setAccessToken, setUnauthorizedHandler } from './api';
 import { secureStorage } from './storage';
 
-const TOKEN_KEY = 'civicpass.accessToken';
-const BIOMETRIC_KEY = 'civicpass.biometricLock';
+const TOKEN_KEY = 'polispass.accessToken';
+const BIOMETRIC_KEY = 'polispass.biometricLock';
 /** Relock after the app has been in the background this long. */
 const RELOCK_AFTER_MS = 60_000;
 
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const unlock = useCallback(async () => {
-    const result = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock CivicPass' });
+    const result = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock Polis Pass' });
     if (result.success) setStatus('signedIn');
     return result.success;
   }, []);
